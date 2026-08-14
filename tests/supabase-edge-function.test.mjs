@@ -55,3 +55,27 @@ test("keeps tester onboarding JWT-verified and derives GitHub identity through a
   assert.match(entrypoint, /createSupabaseBetaMembershipStore/);
   assert.doesNotMatch(entrypoint, /user_metadata|email|login|avatar/);
 });
+
+test("deploys a stateless OAuth-protected MCP Edge Function", async () => {
+  const entrypoint = await readFile(
+    new URL("../supabase/functions/project-builder-mcp/index.ts", import.meta.url),
+    "utf8",
+  );
+  const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
+  const imports = await readFile(
+    new URL("../supabase/functions/deno.json", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(config, /\[functions\.project-builder-mcp\]\s*\nverify_jwt\s*=\s*false/);
+  assert.match(imports, /npm:@modelcontextprotocol\/sdk@1\.25\.3/);
+  assert.match(entrypoint, /WebStandardStreamableHTTPServerTransport/);
+  assert.match(entrypoint, /sessionIdGenerator:\s*undefined/);
+  assert.match(entrypoint, /enableJsonResponse:\s*true/);
+  assert.match(entrypoint, /auth\.getUser\(token\)/);
+  assert.match(entrypoint, /createRemoteMcpHttpHandler/);
+  assert.match(entrypoint, /createRemoteMcpDataStore/);
+  assert.match(entrypoint, /createRemoteReportIssueHandler/);
+  assert.match(entrypoint, /reportIssueInputSchema/);
+  assert.doesNotMatch(entrypoint, /PB_FEEDBACK_TOKEN/);
+});

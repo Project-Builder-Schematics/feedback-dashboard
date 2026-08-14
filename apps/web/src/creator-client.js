@@ -27,6 +27,23 @@ export function betaJoinRedirect() {
   return "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join";
 }
 
+export async function loadOAuthAuthorization(client, authorizationId) {
+  const { data, error } = await client.auth.oauth.getAuthorizationDetails(authorizationId);
+  if (error || !data) throw new Error("Unable to load OAuth authorization.");
+  return data;
+}
+
+export async function decideOAuthAuthorization(client, authorizationId, decision) {
+  const method = decision === "approve" ? "approveAuthorization" : "denyAuthorization";
+  const { data, error } = await client.auth.oauth[method](authorizationId, {
+    skipBrowserRedirect: true,
+  });
+  if (error || typeof data?.redirect_url !== "string") {
+    throw new Error("Unable to complete OAuth authorization.");
+  }
+  return data.redirect_url;
+}
+
 function initials(name) {
   return name
     .split(/\s+/)

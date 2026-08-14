@@ -1,10 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? "/",
   build: {
     outDir: "dist/client",
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        consent: fileURLToPath(new URL("./oauth/consent/index.html", import.meta.url)),
+      },
+    },
   },
   optimizeDeps: {
     include: ["react", "react-dom/client"],

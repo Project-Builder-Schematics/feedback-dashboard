@@ -23,12 +23,17 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   assert.match(workflow, /version:\s*2\.114\.0/);
   assert.match(workflow, /supabase link --project-ref "\$SUPABASE_PROJECT_ID"/);
   assert.match(workflow, /supabase db push/);
+  assert.match(workflow, /supabase config push --project-ref "\$SUPABASE_PROJECT_ID" --yes/);
   assert.match(
     workflow,
     /supabase functions deploy feedback-api --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
   );
   assert.match(workflow, /supabase functions deploy creator-api --project-ref "\$SUPABASE_PROJECT_ID"/);
   assert.match(workflow, /supabase functions deploy tester-api --project-ref "\$SUPABASE_PROJECT_ID"/);
+  assert.match(
+    workflow,
+    /supabase functions deploy project-builder-mcp --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
+  );
   assert.doesNotMatch(workflow, /ENABLE_CREATOR_API/);
   assert.doesNotMatch(workflow, /creator-api[^\n]*--no-verify-jwt|tester-api[^\n]*--no-verify-jwt/);
   assert.doesNotMatch(workflow, /supabase secrets set|PB_CREATOR_USER_IDS|PB_ALLOWED_ORIGINS|PB_FEEDBACK_TOKEN/);
@@ -38,6 +43,15 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   const feedback = workflow.indexOf("supabase functions deploy feedback-api");
   const creator = workflow.indexOf("supabase functions deploy creator-api");
   const tester = workflow.indexOf("supabase functions deploy tester-api");
+  const config = workflow.indexOf("supabase config push");
+  const mcp = workflow.indexOf("supabase functions deploy project-builder-mcp");
 
-  assert.ok(link < migrations && migrations < feedback && feedback < creator && creator < tester);
+  assert.ok(
+    link < migrations &&
+      migrations < config &&
+      config < feedback &&
+      feedback < creator &&
+      creator < tester &&
+      tester < mcp,
+  );
 });

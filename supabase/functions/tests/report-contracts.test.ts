@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createReportRequestSchema,
+  reportIssueInputSchema,
   reportResponseSchema,
   reportSeverities,
   reportStatuses,
@@ -69,4 +70,27 @@ test("validates the API success response shape", () => {
   });
 
   assert.equal(result.success, true);
+});
+
+test("does not accept caller-supplied reporter identity in MCP arguments", () => {
+  const base = {
+    title: "Broken generation",
+    description: "Generation fails.",
+    expectedBehavior: "Generation succeeds.",
+    reproductionSteps: ["Generate"],
+    severity: "High",
+    type: "Bug",
+    platform: "Codex",
+    appVersion: "0.1.0",
+  };
+
+  for (const identity of [
+    { userId: "a59e96b4-51a4-4da9-9f28-19c807d7b785" },
+    { provider: "github" },
+    { providerId: "spoofed" },
+    { reporterEmail: "spoofed@example.com" },
+    { reporterDisplayName: "Spoofed" },
+  ]) {
+    assert.equal(reportIssueInputSchema.safeParse({ ...base, ...identity }).success, false);
+  }
 });

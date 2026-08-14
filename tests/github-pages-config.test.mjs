@@ -65,3 +65,19 @@ test("uses the configured public base path", async () => {
 
   assert.equal(config.base, "/feedback-dashboard/");
 });
+
+test("publishes a real nested OAuth consent entry for GitHub Pages", async () => {
+  const { default: config } = await import(`../apps/web/vite.config.mjs?oauth=${Date.now()}`);
+  const consentHtml = await readFile(
+    new URL("../apps/web/oauth/consent/index.html", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(config.build.rollupOptions.input.main, /apps\/web\/index\.html$/);
+  assert.match(
+    config.build.rollupOptions.input.consent,
+    /apps\/web\/oauth\/consent\/index\.html$/,
+  );
+  assert.match(consentHtml, /<div id="root"><\/div>/);
+  assert.match(consentHtml, /src="\/src\/main\.jsx"/);
+});

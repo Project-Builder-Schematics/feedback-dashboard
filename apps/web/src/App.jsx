@@ -22,8 +22,10 @@ import {
   BETA_INVITE_STORAGE_KEY,
   betaJoinRedirect,
   createBetaInvite,
+  decideOAuthAuthorization,
   getSupabaseClient,
   loadCreatorReports,
+  loadOAuthAuthorization,
   magicLinkRedirect,
   redeemBetaInvite,
   saveCreatorReportStatus,
@@ -215,6 +217,119 @@ function BetaJoinScreen({ client, session, sessionLoading }) {
   );
 }
 
+function OAuthConsentScreen({ client, session, sessionLoading }) {
+  const [authorization, setAuthorization] = useState(null);
+  const [state, setState] = useState("loading");
+  const [message, setMessage] = useState("");
+  const authorizationId = new URLSearchParams(window.location.search).get("authorization_id");
+
+  useEffect(() => {
+    if (sessionLoading) return;
+    if (!session) {
+      setState("sign-in");
+      return;
+    }
+    if (!authorizationId) {
+      setState("error");
+      return;
+    }
+
+    let active = true;
+    setState("loading");
+    loadOAuthAuthorization(client, authorizationId).then(
+      (details) => {
+        if (!active) return;
+        if ("redirect_url" in details) {
+          window.location.assign(details.redirect_url);
+          return;
+        }
+        setAuthorization(details);
+        setState("ready");
+      },
+      () => {
+        if (active) setState("error");
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [authorizationId, client, session, sessionLoading]);
+
+  const beginGithubSignIn = async () => {
+    setMessage("");
+    setState("redirecting");
+    const { error } = await client.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: window.location.href },
+    });
+    if (error) {
+      setState("sign-in");
+      setMessage("GitHub sign-in could not be started.");
+    }
+  };
+
+  const decide = async (decision) => {
+    setMessage("");
+    setState("redirecting");
+    try {
+      const redirectUrl = await decideOAuthAuthorization(client, authorizationId, decision);
+      window.location.assign(redirectUrl);
+    } catch {
+      setState("ready");
+      setMessage("Authorization could not be completed.");
+    }
+  };
+
+  if (sessionLoading || state === "loading") {
+    return <FullPageState title="Checking authorization…" />;
+  }
+  if (state === "error") {
+    return (
+      <FullPageState
+        title="Authorization request is invalid"
+        detail="Return to your MCP client and start the connection again."
+      />
+    );
+  }
+  if (!session || state === "sign-in") {
+    return (
+      <main className="access-shell">
+        <section className="access-card">
+          <span className="brand-mark"><GithubLogo size={23} weight="fill" /></span>
+          <span className="eyebrow">Project Builder MCP</span>
+          <h1>Sign in to continue</h1>
+          <p>Use the GitHub account enrolled in the Project Builder beta.</p>
+          <button type="button" onClick={beginGithubSignIn}>Continue with GitHub</button>
+          {message && <p className="access-message" role="alert">{message}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  const scopes = authorization.scope.split(/\s+/).filter(Boolean);
+  return (
+    <main className="access-shell">
+      <section className="access-card">
+        <span className="brand-mark"><TerminalWindow size={23} weight="fill" /></span>
+        <span className="eyebrow">Project Builder MCP</span>
+        <h1>Authorize {authorization.client.name}</h1>
+        <p>This application wants to connect to Project Builder as your beta tester account.</p>
+        <dl>
+          <dt>Requested access</dt>
+          <dd>{scopes.map((scope) => <span key={scope}>{scope}</span>)}</dd>
+          <dt>Return address</dt>
+          <dd><code>{authorization.redirect_uri}</code></dd>
+        </dl>
+        <button type="button" disabled={state === "redirecting"} onClick={() => decide("approve")}>
+          {state === "redirecting" ? "Redirecting…" : "Authorize"}
+        </button>
+        <button className="secondary-button" type="button" disabled={state === "redirecting"} onClick={() => decide("deny")}>Deny</button>
+        {message && <p className="access-message" role="alert">{message}</p>}
+      </section>
+    </main>
+  );
+}
+
 function BetaInviteControl({ client }) {
   const [invite, setInvite] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -275,6 +390,7 @@ function FullPageState({ title, detail, action }) {
 
 export function App({ client = getSupabaseClient() }) {
   const joinMode = new URLSearchParams(window.location.search).get("mode") === "join";
+  const consentMode = window.location.pathname.endsWith("/oauth/consent/");
   const [sessionLoading, setSessionLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [reports, setReports] = useState([]);
@@ -313,7 +429,7 @@ export function App({ client = getSupabaseClient() }) {
   }, [client]);
 
   useEffect(() => {
-    if (!session || joinMode) return;
+    if (!session || joinMode || consentMode) return;
     let active = true;
     setReportsState("loading");
     loadCreatorReports(client).then(
@@ -331,7 +447,7 @@ export function App({ client = getSupabaseClient() }) {
     return () => {
       active = false;
     };
-  }, [client, joinMode, session]);
+  }, [client, consentMode, joinMode, session]);
 
   const selected = reports.find((report) => report.reportId === selectedId) ?? reports[0];
   const counts = useMemo(
@@ -358,6 +474,9 @@ export function App({ client = getSupabaseClient() }) {
 
   if (joinMode) {
     return <BetaJoinScreen client={client} session={session} sessionLoading={sessionLoading} />;
+  }
+  if (consentMode) {
+    return <OAuthConsentScreen client={client} session={session} sessionLoading={sessionLoading} />;
   }
   if (sessionLoading) return <FullPageState title="Checking creator access…" />;
   if (!session) return <AccessScreen client={client} />;

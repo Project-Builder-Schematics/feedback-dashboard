@@ -6,3 +6,23 @@ verify_jwt = true
 
 [functions.tester-api]
 verify_jwt = true
+
+[functions.project-builder-mcp]
+verify_jwt = false
+
+[auth]
+site_url = "https://project-builder-schematics.github.io"
+additional_redirect_urls = [
+  "https://project-builder-schematics.github.io/feedback-dashboard/",
+  "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",
+  "https://project-builder-schematics.github.io/feedback-dashboard/oauth/consent/**",
+]
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/project_builder_access_token_hook"
+
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/feedback-dashboard/oauth/consent/"
+allow_dynamic_registration = true

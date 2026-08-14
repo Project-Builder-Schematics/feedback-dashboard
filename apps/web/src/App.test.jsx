@@ -7,6 +7,8 @@ import { App } from "./App.jsx";
 import {
   BETA_INVITE_STORAGE_KEY,
   betaJoinRedirect,
+  decideOAuthAuthorization,
+  loadOAuthAuthorization,
   magicLinkRedirect,
   mapCreatorReport,
 } from "./creator-client.js";
@@ -37,10 +39,28 @@ function createClient({
   patch,
   createInvite,
   redeem,
+  authorizationDetails,
 } = {}) {
   let authListener = () => {};
   const signInWithOtp = vi.fn(async () => ({ data: {}, error: null }));
   const signInWithOAuth = vi.fn(async () => ({ data: {}, error: null }));
+  const getAuthorizationDetails = vi.fn(async () => ({
+    data: authorizationDetails ?? {
+      authorization_id: "authorization-123",
+      redirect_uri: "http://127.0.0.1:1455/callback",
+      client: { name: "Codex CLI" },
+      scope: "openid email",
+    },
+    error: null,
+  }));
+  const approveAuthorization = vi.fn(async () => ({
+    data: { redirect_url: "http://127.0.0.1:1455/callback?code=approved" },
+    error: null,
+  }));
+  const denyAuthorization = vi.fn(async () => ({
+    data: { redirect_url: "http://127.0.0.1:1455/callback?error=access_denied" },
+    error: null,
+  }));
   const signOut = vi.fn(async () => {
     authListener("SIGNED_OUT", null);
     return { error: null };
@@ -82,6 +102,11 @@ function createClient({
       signInWithOtp,
       signInWithOAuth,
       signOut,
+      oauth: {
+        getAuthorizationDetails,
+        approveAuthorization,
+        denyAuthorization,
+      },
     },
     functions: { invoke },
   };
@@ -105,6 +130,63 @@ describe("Project Builder creator dashboard", () => {
     expect(betaJoinRedirect("/wrong-path/", "http://localhost:5173")).toBe(
       "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",
     );
+  });
+
+  it("loads and decides an OAuth authorization through Supabase Auth", async () => {
+    const client = createClient();
+
+    await expect(loadOAuthAuthorization(client, "authorization-123")).resolves.toMatchObject({
+      authorization_id: "authorization-123",
+      client: { name: "Codex CLI" },
+    });
+    await expect(
+      decideOAuthAuthorization(client, "authorization-123", "approve"),
+    ).resolves.toBe("http://127.0.0.1:1455/callback?code=approved");
+
+    expect(client.auth.oauth.getAuthorizationDetails).toHaveBeenCalledWith("authorization-123");
+    expect(client.auth.oauth.approveAuthorization).toHaveBeenCalledWith("authorization-123", {
+      skipBrowserRedirect: true,
+    });
+    expect(client.auth.oauth.denyAuthorization).not.toHaveBeenCalled();
+  });
+
+  it("keeps the OAuth authorization request when GitHub sign-in is required", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/feedback-dashboard/oauth/consent/?authorization_id=authorization-123",
+    );
+    const user = userEvent.setup();
+    const client = createClient();
+    render(<App client={client} />);
+
+    await user.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
+
+    expect(client.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "github",
+      options: {
+        redirectTo:
+          "http://localhost:3000/feedback-dashboard/oauth/consent/?authorization_id=authorization-123",
+      },
+    });
+    expect(client.functions.invoke).not.toHaveBeenCalled();
+  });
+
+  it("shows the requesting MCP client without loading creator feedback", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/feedback-dashboard/oauth/consent/?authorization_id=authorization-123",
+    );
+    const client = createClient({ session: { user: { id: "tester" } } });
+    render(<App client={client} />);
+
+    expect(await screen.findByRole("heading", { name: "Authorize Codex CLI" })).toBeTruthy();
+    expect(screen.getByText("openid")).toBeTruthy();
+    expect(screen.getByText("email")).toBeTruthy();
+    expect(screen.getByText("http://127.0.0.1:1455/callback")).toBeTruthy();
+    expect(client.auth.oauth.getAuthorizationDetails).toHaveBeenCalledWith("authorization-123");
+    expect(client.functions.invoke).not.toHaveBeenCalled();
   });
 
   it("requests a magic link without creating unknown users and starts a client cooldown", async () => {

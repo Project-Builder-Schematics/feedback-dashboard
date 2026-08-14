@@ -117,3 +117,26 @@ test("adds atomic beta invitations, GitHub profiles, and append-only membership 
     /select \*\s+into profile\s+from public\.beta_profiles\s+where user_id = p_user_id\s+or/i,
   );
 });
+
+test("adds durable report provenance and resource-bound OAuth access tokens", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260815020000_add_remote_mcp.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(migration, /alter column reporter_email drop not null/i);
+  assert.match(migration, /add column if not exists reporter_user_id uuid/i);
+  assert.match(migration, /add column if not exists reporter_provider text/i);
+  assert.match(migration, /add column if not exists reporter_provider_id text/i);
+  assert.match(migration, /reporter_provider = 'github'/i);
+  assert.match(migration, /create index.*reports_reporter_user_id/i);
+  assert.doesNotMatch(migration, /reporter_user_id.*references auth\.users/is);
+  assert.match(migration, /create or replace function public\.project_builder_access_token_hook/i);
+  assert.match(migration, /claims->>'client_id'/i);
+  assert.match(
+    migration,
+    /https:\/\/bbivrybsyxpmkstomccd\.supabase\.co\/functions\/v1\/project-builder-mcp/i,
+  );
+  assert.match(migration, /grant execute.*supabase_auth_admin/is);
+  assert.match(migration, /revoke all.*public, anon, authenticated/is);
+});

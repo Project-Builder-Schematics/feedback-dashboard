@@ -27,7 +27,7 @@ export const createReportRequestSchema = z.object({
 export const reportIssueInputSchema = createReportRequestSchema.omit({
   reporterDisplayName: true,
   reporterEmail: true,
-});
+}).strict();
 
 export const reportResponseSchema = z.object({
   id: z.uuid(),
