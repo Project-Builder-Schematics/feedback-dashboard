@@ -1,28 +1,24 @@
 {
   "name": "project-builder-feedback",
-  "version": "0.0.0",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "test": "vitest run src/App.test.jsx --environment jsdom",
-    "build": "vite build && node scripts/prepare-sites-build.mjs",
-    "preview": "vite preview",
-    "test:sites": "node --test tests/sites-worker.test.mjs"
-  },
-  "dependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
-    "@fontsource-variable/jetbrains-mono": "^5.3.0",
-    "@phosphor-icons/react": "^2.1.10",
-    "@vitejs/plugin-react": "5.0.4",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "vite": "6.4.2"
+    "test": "npm run test:structure && npm run test:contracts && npm run test:api && npm run test:mcp && npm run test:supabase && npm run test:web && npm run test:pages && npm run test:sites",
+    "test:structure": "node --test tests/monorepo-structure.test.mjs",
+    "test:contracts": "tsx --test supabase/functions/tests/report-contracts.test.ts",
+    "test:api": "tsx --test supabase/functions/tests/feedback-api.test.ts supabase/functions/tests/creator-api.test.ts supabase/functions/tests/rate-limit.test.ts supabase/functions/tests/tester-api.test.ts",
+    "test:mcp": "npm --workspace apps/mcp test",
+    "test:supabase": "node --test tests/supabase-*.test.mjs",
+    "test:web": "npm --workspace apps/web test",
+    "test:pages": "node --test tests/github-pages-config.test.mjs",
+    "test:sites": "npm --workspace apps/web run test:sites"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.4",
-    "jsdom": "^30.0.1",
-    "vitest": "^4.1.10"
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
   }
 }

@@ -1,7 +1,11 @@
 node_modules/
 dist/
-qa/*.png
-!qa/dense-implementation-final.png
-!qa/dense-comparison-final.png
-!qa/dense-focused-detail-final.png
+.vite/
+apps/web/qa/*.png
+!apps/web/qa/dense-implementation-final.png
+!apps/web/qa/dense-comparison-final.png
+!apps/web/qa/dense-focused-detail-final.png
+.env
+.env.*
+!.env.example
 .DS_Store

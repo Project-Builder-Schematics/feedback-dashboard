@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import worker from "../worker/index.js";
+
+const runFile = promisify(execFile);
 
 test("serves existing static assets without a fallback", async () => {
   const calls = [];
@@ -61,8 +66,24 @@ test("does not turn missing API or write requests into the app shell", async () 
   }
 });
 
-test("emits the files required by Sites packaging", async () => {
-  await access(new URL("../dist/client/index.html", import.meta.url));
-  await access(new URL("../dist/server/index.js", import.meta.url));
-  await access(new URL("../dist/.openai/hosting.json", import.meta.url));
+test("prepares the files required by Sites packaging", async () => {
+  const distUrl = new URL("../dist/", import.meta.url);
+
+  await rm(distUrl, { force: true, recursive: true });
+
+  try {
+    await mkdir(new URL("../dist/client/", import.meta.url), { recursive: true });
+    await writeFile(
+      new URL("../dist/client/index.html", import.meta.url),
+      "<!doctype html><title>fixture</title>",
+    );
+
+    await runFile(process.execPath, [fileURLToPath(new URL("../scripts/prepare-sites-build.mjs", import.meta.url))]);
+
+    await access(new URL("../dist/client/index.html", import.meta.url));
+    await access(new URL("../dist/server/index.js", import.meta.url));
+    await access(new URL("../dist/.openai/hosting.json", import.meta.url));
+  } finally {
+    await rm(distUrl, { force: true, recursive: true });
+  }
 });

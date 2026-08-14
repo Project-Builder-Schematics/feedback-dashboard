@@ -38,6 +38,103 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+.access-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f3fb;
+  color: #3a3c44;
+}
+
+.access-card {
+  width: min(440px, 100%);
+  padding: 36px;
+  border: 1px solid #e2dcef;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px #351b6b17;
+}
+
+.access-card .brand-mark {
+  margin-bottom: 26px;
+}
+
+.access-card h1 {
+  margin: 0;
+  color: #24252b;
+  font-size: 28px;
+  letter-spacing: -0.035em;
+}
+
+.access-card > p {
+  margin: 10px 0 24px;
+  color: #62666d;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.access-card form {
+  display: grid;
+  gap: 9px;
+}
+
+.access-card label {
+  color: #24252b;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.access-card input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #d4d6db;
+  border-radius: 8px;
+  background: #fafafb;
+  color: #24252b;
+}
+
+.access-card button,
+.sign-out-button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 680;
+}
+
+.access-card form button {
+  margin-top: 5px;
+  background: #6941c6;
+  color: #fff;
+}
+
+.access-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.access-card .access-message {
+  margin: 16px 0 0;
+  color: #3d2585;
+  font-size: 12px;
+}
+
+.state-card {
+  text-align: center;
+}
+
+.state-card > svg {
+  margin-bottom: 14px;
+  color: #6941c6;
+}
+
+.state-card button {
+  padding: 0 18px;
+  background: #24252b;
+  color: #fff;
+}
+
 .app-shell {
   --bg: #fff;
   --surface-1: #fafafb;
@@ -188,6 +285,24 @@ kbd {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
+}
+
+.sign-out-button {
+  max-width: 180px;
+  min-height: 34px;
+  overflow: hidden;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sign-out-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .connection {
@@ -1367,6 +1482,39 @@ kbd {
   background: var(--surface-3);
   color: var(--quiet);
   cursor: not-allowed;
+}
+
+.mutation-error {
+  margin: 2px 0 0;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.discard-reason {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.not-provided-panel {
+  min-height: 116px;
+  display: grid;
+  place-items: center;
+  margin-top: 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-1);
+  color: var(--quiet);
+  font-size: 11px;
+}
+
+.not-provided-inline {
+  padding: 18px 0;
+  color: var(--quiet);
+  font-size: 11px;
 }
 
 @media (max-width: 1120px) {

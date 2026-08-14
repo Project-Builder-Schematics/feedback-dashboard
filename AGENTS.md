@@ -6,7 +6,7 @@ Before making substantial visual changes, use the Product Design plugin's `get-c
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
 
-Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
+Build app UI in `apps/web/src/`. Keep `apps/web/.openai/hosting.json`, `apps/web/worker/index.js`, `apps/web/scripts/prepare-sites-build.mjs`, and `apps/web/tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm --workspace apps/web run build` and `npm --workspace apps/web run test:sites`; the build must leave `apps/web/dist/client/index.html`, `apps/web/dist/server/index.js`, and `apps/web/dist/.openai/hosting.json`.
 
 ## Product Direction
 
