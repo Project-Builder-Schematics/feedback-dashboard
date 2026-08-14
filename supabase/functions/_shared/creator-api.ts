@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { PayloadTooLargeError, readBoundedJsonBody } from "./bounded-json.ts";
 import { exactCorsHeaders, parseExactOriginAllowlist } from "./exact-cors.ts";
-import { reportStatuses } from "./report-contracts.ts";
+import { reportStatuses, toUtcIsoDatetime } from "./report-contracts.ts";
 import type { RateLimiter } from "./rate-limit.ts";
 import { sha256Hex } from "./sha256.ts";
 
@@ -48,7 +48,36 @@ type ReportRow = Record<string, unknown> & {
   id: string;
   public_number?: number;
   publicId?: string;
+  created_at: string;
+  updated_at: string;
+  attachments?: CreatorAttachment[];
 };
+
+interface CreatorAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  signedUrl: string;
+  createdAt: string;
+}
+
+interface AttachmentRow {
+  id: string;
+  report_id: string;
+  original_file_name: string;
+  content_type: string;
+  size_bytes: number;
+  object_path: string;
+  created_at: string;
+}
+
+interface AttachmentUrlSigner {
+  createSignedUrls(
+    paths: string[],
+    expiresIn: number,
+  ): Promise<Array<{ path: string; signedUrl: string }>>;
+}
 
 interface CreatorReportStore {
   createBetaInvite(input: {
@@ -85,14 +114,27 @@ interface CreatorApiOptions {
 
 interface SupabaseClientLike {
   from(table: string): {
-    select(columns: string): {
-      order(column: string, options: { ascending: boolean }): {
-        limit(value: number): PromiseLike<{ data: ReportRow[] | null; error: unknown }>;
-      };
-    };
+    select(columns: string): unknown;
   };
   rpc(name: string, input: Record<string, unknown>): {
     single(): PromiseLike<{ data: Record<string, unknown> | null; error: unknown }>;
+  };
+}
+
+interface ReportSelectQuery {
+  order(column: string, options: { ascending: boolean }): {
+    limit(value: number): PromiseLike<{ data: ReportRow[] | null; error: unknown }>;
+  };
+}
+
+interface AttachmentSelectQuery {
+  in(column: string, values: string[]): {
+    eq(column: string, value: string): {
+      order(
+        column: string,
+        options: { ascending: boolean },
+      ): PromiseLike<{ data: AttachmentRow[] | null; error: unknown }>;
+    };
   };
 }
 
@@ -112,6 +154,8 @@ function toCreatorReportDto(row: ReportRow) {
   return {
     ...row,
     publicId: row.publicId ?? `PB-${row.public_number}`,
+    created_at: toUtcIsoDatetime(row.created_at),
+    updated_at: toUtcIsoDatetime(row.updated_at),
   };
 }
 
@@ -259,7 +303,7 @@ export function createCreatorApiHandler({
           expiresAt,
           requestId: requestId(),
         });
-        return json({ code, expiresAt: created.expiresAt }, 201, headers);
+        return json({ code, expiresAt: toUtcIsoDatetime(created.expiresAt) }, 201, headers);
       }
 
       const parsed = statusUpdateSchema.safeParse(body);
@@ -295,7 +339,10 @@ export function createCreatorApiHandler({
   };
 }
 
-export function createSupabaseCreatorReportStore(supabase: SupabaseClientLike): CreatorReportStore {
+export function createSupabaseCreatorReportStore(
+  supabase: SupabaseClientLike,
+  attachmentUrlSigner: AttachmentUrlSigner,
+): CreatorReportStore {
   return {
     async createBetaInvite({ tokenHash, creatorId, expiresAt, requestId }) {
       const { data, error } = await supabase
@@ -312,13 +359,53 @@ export function createSupabaseCreatorReportStore(supabase: SupabaseClientLike): 
       return { expiresAt: data.expires_at };
     },
     async list() {
-      const { data, error } = await supabase
+      const reportQuery = supabase
         .from("reports")
-        .select(CREATOR_REPORT_COLUMNS)
+        .select(CREATOR_REPORT_COLUMNS) as ReportSelectQuery;
+      const { data, error } = await reportQuery
         .order("created_at", { ascending: false })
         .limit(100);
       if (error || !data) throw new Error("Unable to list reports.");
-      return data.map(toCreatorReportDto);
+      if (data.length === 0) return [];
+
+      const attachmentQuery = supabase
+        .from("report_attachments")
+        .select(
+          "id, report_id, original_file_name, content_type, size_bytes, object_path, created_at",
+        ) as AttachmentSelectQuery;
+      const { data: attachments, error: attachmentError } = await attachmentQuery
+        .in("report_id", data.map((report) => report.id))
+        .eq("status", "ready")
+        .order("created_at", { ascending: true });
+      if (attachmentError || !attachments) throw new Error("Unable to list report attachments.");
+
+      const signedUrls = await attachmentUrlSigner.createSignedUrls(
+        attachments.map((attachment) => attachment.object_path),
+        900,
+      );
+      const signedUrlByPath = new Map(signedUrls.map((item) => [item.path, item.signedUrl]));
+      const attachmentsByReport = new Map<string, CreatorAttachment[]>();
+      for (const attachment of attachments) {
+        const signedUrl = signedUrlByPath.get(attachment.object_path);
+        if (!signedUrl) throw new Error("Unable to sign report attachment.");
+        const reportAttachments = attachmentsByReport.get(attachment.report_id) ?? [];
+        reportAttachments.push({
+          id: attachment.id,
+          fileName: attachment.original_file_name,
+          contentType: attachment.content_type,
+          sizeBytes: attachment.size_bytes,
+          signedUrl,
+          createdAt: toUtcIsoDatetime(attachment.created_at),
+        });
+        attachmentsByReport.set(attachment.report_id, reportAttachments);
+      }
+
+      return data.map((report) =>
+        toCreatorReportDto({
+          ...report,
+          attachments: attachmentsByReport.get(report.id) ?? [],
+        }),
+      );
     },
     async updateStatus({ reportId, status, discardReason, actorId, requestId }) {
       const { data, error } = await supabase

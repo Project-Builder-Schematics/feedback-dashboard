@@ -23,7 +23,21 @@ export default {
       return {
         actorId,
         rateLimiter: createSupabaseRateLimiter(context.supabaseAdmin),
-        store: createSupabaseCreatorReportStore(context.supabaseAdmin),
+        store: createSupabaseCreatorReportStore(context.supabaseAdmin, {
+          async createSignedUrls(paths, expiresIn) {
+            const { data, error: storageError } = await context.supabaseAdmin.storage
+              .from("report-attachments")
+              .createSignedUrls(paths, expiresIn);
+            if (storageError || !data) throw new Error("Unable to sign report attachments.");
+            const signedUrls = data.flatMap(({ error, path, signedUrl }) =>
+              !error && path && signedUrl ? [{ path, signedUrl }] : []
+            );
+            if (signedUrls.length !== paths.length) {
+              throw new Error("Unable to sign report attachments.");
+            }
+            return signedUrls;
+          },
+        }),
       };
     },
   }),

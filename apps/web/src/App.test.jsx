@@ -31,6 +31,24 @@ const reportDto = {
   updated_at: "2026-08-14T07:20:00.000Z",
 };
 
+const imageAttachment = {
+  id: "38c6c0e7-dba5-44dc-9de5-75bb728f3d12",
+  fileName: "generator-hang.png",
+  contentType: "image/png",
+  sizeBytes: 2048,
+  signedUrl: "https://storage.example/image.png?token=private",
+  createdAt: "2026-08-14T07:22:00.000Z",
+};
+
+const videoAttachment = {
+  id: "a0fd4532-8702-4631-b14c-df25a31c75bf",
+  fileName: "generator-hang.mp4",
+  contentType: "video/mp4",
+  sizeBytes: 5_242_880,
+  signedUrl: "https://storage.example/video.mp4?token=private",
+  createdAt: "2026-08-14T07:23:00.000Z",
+};
+
 function createClient({
   session = null,
   reports = [],
@@ -254,7 +272,10 @@ describe("Project Builder creator dashboard", () => {
   });
 
   it("maps the real API DTO without inventing incident or evidence fields", () => {
-    expect(mapCreatorReport(reportDto, new Date("2026-08-14T08:20:00.000Z"))).toMatchObject({
+    expect(mapCreatorReport(
+      { ...reportDto, attachments: [imageAttachment] },
+      new Date("2026-08-14T08:20:00.000Z"),
+    )).toMatchObject({
       reportId: reportDto.id,
       id: "PB-142",
       tester: "Taylor",
@@ -267,7 +288,34 @@ describe("Project Builder creator dashboard", () => {
       failure: "Not provided",
       impact: "Not provided",
       age: "1h",
+      attachments: [imageAttachment],
     });
+  });
+
+  it("renders private image and video evidence linked to the selected report", async () => {
+    render(
+      <App
+        client={createClient({
+          session: { user: { id: "creator" } },
+          reports: [{ ...reportDto, attachments: [imageAttachment, videoAttachment] }],
+        })}
+      />,
+    );
+
+    await screen.findByRole("heading", { name: reportDto.title });
+
+    const imageLink = screen.getByRole("link", { name: "Preview generator-hang.png" });
+    expect(imageLink.getAttribute("href")).toBe(imageAttachment.signedUrl);
+    expect(imageLink.getAttribute("rel")).toContain("noreferrer");
+    expect(screen.getByRole("img", { name: "generator-hang.png" }).getAttribute("src")).toBe(
+      imageAttachment.signedUrl,
+    );
+    expect(screen.getByLabelText("Video: generator-hang.mp4").getAttribute("src")).toBe(
+      videoAttachment.signedUrl,
+    );
+    expect(screen.getByText("2 KB")).toBeTruthy();
+    expect(screen.getByText("5 MB")).toBeTruthy();
+    expect(screen.queryByText("No evidence was submitted with this report.")).toBeNull();
   });
 
   it("loads real reports without presenting demo evidence or history as durable", async () => {

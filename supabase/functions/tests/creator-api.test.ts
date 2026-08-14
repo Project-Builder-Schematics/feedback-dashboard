@@ -30,6 +30,15 @@ const reportRow = {
   created_at: "2026-08-14T07:20:00.000Z",
   updated_at: "2026-08-14T07:20:00.000Z",
 };
+const attachmentRow = {
+  id: "38c6c0e7-dba5-44dc-9de5-75bb728f3d12",
+  report_id: reportId,
+  original_file_name: "generator-hang.png",
+  content_type: "image/png",
+  size_bytes: 2048,
+  object_path: `reports/${reportId}/38c6c0e7-dba5-44dc-9de5-75bb728f3d12`,
+  created_at: "2026-08-14T20:22:00.654321+13:00",
+};
 
 function allowingRateLimiter(onConsume?: (...input: unknown[]) => void) {
   return {
@@ -159,42 +168,99 @@ test("rejects origins outside the exact CORS allowlist without authenticating", 
   assert.equal(authenticated, false);
 });
 
-test("lists explicit columns in newest-first order with a hard bound", async () => {
+test("lists reports with short-lived private attachment URLs without exposing object paths", async () => {
   const calls: unknown[] = [];
-  const store = createSupabaseCreatorReportStore({
-    from(table: string) {
-      calls.push(["from", table]);
-      return {
-        select(columns: string) {
-          calls.push(["select", columns]);
+  const store = createSupabaseCreatorReportStore(
+    {
+      from(table: string) {
+        calls.push(["from", table]);
+        if (table === "reports") {
           return {
-            order(column: string, options: unknown) {
-              calls.push(["order", column, options]);
+            select(columns: string) {
+              calls.push(["select-reports", columns]);
               return {
-                async limit(value: number) {
-                  calls.push(["limit", value]);
-                  return { data: [reportRow], error: null };
+                order(column: string, options: unknown) {
+                  calls.push(["order-reports", column, options]);
+                  return {
+                    async limit(value: number) {
+                      calls.push(["limit", value]);
+                      return {
+                        data: [{
+                          ...reportRow,
+                          created_at: "2026-08-14T20:20:00.123456+13:00",
+                          updated_at: "2026-08-14T20:21:00.987654+13:00",
+                        }],
+                        error: null,
+                      };
+                    },
+                  };
                 },
               };
             },
           };
-        },
-      };
+        }
+        return {
+          select(columns: string) {
+            calls.push(["select-attachments", columns]);
+            return {
+              in(column: string, values: unknown[]) {
+                calls.push(["in", column, values]);
+                return {
+                  eq(columnName: string, value: string) {
+                    calls.push(["eq", columnName, value]);
+                    return {
+                      async order(orderColumn: string, options: unknown) {
+                        calls.push(["order-attachments", orderColumn, options]);
+                        return { data: [attachmentRow], error: null };
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+      rpc() {
+        throw new Error("should not update");
+      },
     },
-    rpc() {
-      throw new Error("should not update");
+    {
+      async createSignedUrls(paths: string[], expiresIn: number) {
+        calls.push(["sign", paths, expiresIn]);
+        return paths.map((path) => ({ path, signedUrl: `https://storage.example/${path}?token=private` }));
+      },
     },
-  });
+  );
 
   const result = await store.list();
 
   assert.deepEqual(calls, [
     ["from", "reports"],
-    ["select", CREATOR_REPORT_COLUMNS],
-    ["order", "created_at", { ascending: false }],
+    ["select-reports", CREATOR_REPORT_COLUMNS],
+    ["order-reports", "created_at", { ascending: false }],
     ["limit", 100],
+    ["from", "report_attachments"],
+    ["select-attachments", "id, report_id, original_file_name, content_type, size_bytes, object_path, created_at"],
+    ["in", "report_id", [reportId]],
+    ["eq", "status", "ready"],
+    ["order-attachments", "created_at", { ascending: true }],
+    ["sign", [attachmentRow.object_path], 900],
   ]);
   assert.equal(result[0]?.publicId, "PB-142");
+  assert.equal(result[0]?.created_at, "2026-08-14T07:20:00.123Z");
+  assert.equal(result[0]?.updated_at, "2026-08-14T07:21:00.987Z");
+  assert.deepEqual(result[0]?.attachments, [
+    {
+      id: attachmentRow.id,
+      fileName: "generator-hang.png",
+      contentType: "image/png",
+      sizeBytes: 2048,
+      signedUrl: `https://storage.example/${attachmentRow.object_path}?token=private`,
+      createdAt: "2026-08-14T07:22:00.654Z",
+    },
+  ]);
+  assert.equal(JSON.stringify(result).includes("object_path"), false);
 });
 
 test("strictly rejects invalid status updates without writing an audit event", async () => {
@@ -263,19 +329,22 @@ test("rejects an oversized request before JSON parsing", async () => {
 
 test("updates status through one atomic RPC and clears irrelevant discard reasons", async () => {
   const rpcCalls: unknown[] = [];
-  const store = createSupabaseCreatorReportStore({
-    from() {
-      throw new Error("should not list");
+  const store = createSupabaseCreatorReportStore(
+    {
+      from() {
+        throw new Error("should not list");
+      },
+      rpc(name: string, input: unknown) {
+        rpcCalls.push([name, input]);
+        return {
+          async single() {
+            return { data: { ...reportRow, status: "Resolved", discard_reason: null }, error: null };
+          },
+        };
+      },
     },
-    rpc(name: string, input: unknown) {
-      rpcCalls.push([name, input]);
-      return {
-        async single() {
-          return { data: { ...reportRow, status: "Resolved", discard_reason: null }, error: null };
-        },
-      };
-    },
-  });
+    { async createSignedUrls() { throw new Error("should not sign"); } },
+  );
   const handler = createCreatorApiHandler(
     handlerOptions({
       authenticate: async () => ({ actorId: creatorId, rateLimiter: allowingRateLimiter(), store }),
@@ -446,7 +515,7 @@ test("creates a one-time beta invite from 32 injected random bytes and stores on
         store: {
           async createBetaInvite(input: unknown) {
             stored.push(input);
-            return { expiresAt: "2026-08-15T07:20:00.000Z" };
+            return { expiresAt: "2026-08-15T20:20:00.000000+13:00" };
           },
           async list() {
             throw new Error("should not list");

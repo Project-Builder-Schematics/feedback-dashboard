@@ -83,6 +83,7 @@ export function mapCreatorReport(dto, now = new Date()) {
     impact: "Not provided",
     steps: dto.reproduction_steps,
     discardReason: dto.discard_reason,
+    attachments: Array.isArray(dto.attachments) ? dto.attachments : [],
   };
 }
 

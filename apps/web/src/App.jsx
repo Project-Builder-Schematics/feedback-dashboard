@@ -61,6 +61,17 @@ function Platform({ name }) {
   return <span className="platform"><TerminalWindow size={14} weight="fill" />{name}</span>;
 }
 
+function attachmentSize(sizeBytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let size = sizeBytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${Number.isInteger(size) || size >= 10 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
+}
+
 function AccessHeader({ icon: Icon, eyebrow, title, description }) {
   return (
     <header className="access-header">
@@ -847,7 +858,44 @@ export function App({ client = getSupabaseClient() }) {
           </section>
           <section className="evidence-section" aria-labelledby="evidence-title">
             <div className="section-heading"><div><h2 id="evidence-title">Evidence</h2><span className="section-hint">Attachments supplied by the tester</span></div></div>
-            <div className="not-provided-panel">No evidence was submitted with this report.</div>
+            {selected.attachments.length === 0 ? (
+              <div className="not-provided-panel">No evidence was submitted with this report.</div>
+            ) : (
+              <div className="attachment-grid">
+                {selected.attachments.map((attachment) => (
+                  <article className="attachment-card" key={attachment.id}>
+                    {attachment.contentType.startsWith("image/") ? (
+                      <a
+                        className="attachment-preview"
+                        href={attachment.signedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Preview ${attachment.fileName}`}
+                      >
+                        <img src={attachment.signedUrl} alt={attachment.fileName} loading="lazy" />
+                      </a>
+                    ) : (
+                      <video
+                        className="attachment-preview"
+                        src={attachment.signedUrl}
+                        controls
+                        preload="metadata"
+                        aria-label={`Video: ${attachment.fileName}`}
+                      />
+                    )}
+                    <footer>
+                      <div><strong>{attachment.fileName}</strong><span>{attachmentSize(attachment.sizeBytes)}</span></div>
+                      <a
+                        href={attachment.signedUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Open ${attachment.fileName}`}
+                      ><Paperclip size={14} />Open</a>
+                    </footer>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
           <div className="detail-lower">
             <section className="environment" aria-labelledby="environment-title">
