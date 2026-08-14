@@ -216,7 +216,7 @@ test("inserts the report through Supabase and returns the public identifier", as
                     id: "5f52c35f-8334-46b6-ac4d-8f0e52c8d5d9",
                     public_number: 142,
                     status: "Pending",
-                    created_at: "2026-08-14T07:20:00.000Z",
+                    created_at: "2026-08-14T07:20:00.987654+13:00",
                   },
                   error: null,
                 }),
@@ -247,7 +247,7 @@ test("inserts the report through Supabase and returns the public identifier", as
     id: "5f52c35f-8334-46b6-ac4d-8f0e52c8d5d9",
     publicId: "PB-142",
     status: "Pending",
-    submittedAt: "2026-08-14T07:20:00.000Z",
+    submittedAt: "2026-08-13T18:20:00.987Z",
   });
 });
 

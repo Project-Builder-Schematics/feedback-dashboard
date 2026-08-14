@@ -42,6 +42,13 @@ export const reportIssueOutputSchema = reportResponseSchema.pick({
   submittedAt: true,
 });
 
+export function toUtcIsoDatetime(value: unknown) {
+  if (typeof value !== "string") throw new Error("Report timestamp is unavailable.");
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) throw new Error("Report timestamp is invalid.");
+  return timestamp.toISOString();
+}
+
 export const attachmentUploadLinkInputSchema = z.object({
   reportId: z.string().regex(/^PB-[1-9]\d*$/),
 }).strict();

@@ -345,7 +345,7 @@ test("queries active membership and inserts report attribution through the admin
                       id: "8e0b6c53-e681-4c65-aa2d-3e0b3fd1bbf7",
                       public_number: 42,
                       status: "Pending",
-                      created_at: "2026-08-14T10:00:00.000Z",
+                      created_at: "2026-08-14T10:00:00.123456+13:00",
                     },
                     error: null,
                   };
@@ -381,6 +381,7 @@ test("queries active membership and inserts report attribution through the admin
   );
 
   assert.equal(report.publicId, "PB-42");
+  assert.equal(report.submittedAt, "2026-08-13T21:00:00.123Z");
   assert.deepEqual(calls[1], [
     "beta_profiles",
     [

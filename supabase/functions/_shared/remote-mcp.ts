@@ -7,6 +7,7 @@ import {
   reportIssueInputSchema,
   reportIssueOutputSchema,
   reportResponseSchema,
+  toUtcIsoDatetime,
   type ReportIssueInput,
   type ReportResponse,
   type AttachmentUploadLinkInput,
@@ -300,7 +301,7 @@ export function createRemoteMcpDataStore(supabase: SupabaseClientLike): RemoteMc
         id: data.id,
         publicId: `PB-${data.public_number}`,
         status: data.status,
-        submittedAt: data.created_at,
+        submittedAt: toUtcIsoDatetime(data.created_at),
       });
     },
   };

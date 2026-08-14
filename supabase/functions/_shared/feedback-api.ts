@@ -1,6 +1,7 @@
 import {
   createReportRequestSchema,
   reportResponseSchema,
+  toUtcIsoDatetime,
   type CreateReportRequest,
   type ReportResponse,
 } from "./report-contracts.ts";
@@ -217,7 +218,7 @@ export function createSupabaseReportStore(supabase: SupabaseClientLike): ReportS
         id: data.id,
         publicId: `PB-${data.public_number}`,
         status: data.status,
-        submittedAt: data.created_at,
+        submittedAt: toUtcIsoDatetime(data.created_at),
       });
     },
   };
