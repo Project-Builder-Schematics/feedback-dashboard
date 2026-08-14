@@ -382,6 +382,21 @@ describe("Project Builder creator dashboard", () => {
     );
   });
 
+  it("redeems a pending invite after PKCE has consumed the callback code", async () => {
+    const invite = `pb_inv_${"F".repeat(43)}`;
+    window.sessionStorage.setItem(BETA_INVITE_STORAGE_KEY, invite);
+    window.history.replaceState({}, "", "/feedback-dashboard/?mode=join");
+    const client = createClient({ session: { user: { id: "tester" } } });
+    render(<App client={client} />);
+
+    expect(await screen.findByRole("heading", { name: "Beta access activated" })).toBeTruthy();
+    expect(window.sessionStorage.getItem(BETA_INVITE_STORAGE_KEY)).toBeNull();
+    expect(client.functions.invoke).toHaveBeenCalledWith("tester-api", {
+      method: "POST",
+      body: { code: invite },
+    });
+  });
+
   it("removes the pending invite and OAuth URL material before activating membership", async () => {
     const invite = `pb_inv_${"B".repeat(43)}`;
     window.sessionStorage.setItem(BETA_INVITE_STORAGE_KEY, invite);

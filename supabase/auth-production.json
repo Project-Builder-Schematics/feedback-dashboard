@@ -1,0 +1,14 @@
+{
+  "site_url": "https://project-builder-schematics.github.io",
+  "uri_allow_list": "https://project-builder-schematics.github.io/feedback-dashboard/,https://project-builder-schematics.github.io/feedback-dashboard/?mode=join,https://project-builder-schematics.github.io/feedback-dashboard/oauth/consent/**",
+  "hook_custom_access_token_enabled": true,
+  "hook_custom_access_token_uri": "pg-functions://postgres/public/project_builder_access_token_hook",
+  "oauth_server_enabled": true,
+  "oauth_server_allow_dynamic_registration": true,
+  "oauth_server_authorization_path": "/feedback-dashboard/oauth/consent/",
+  "mailer_autoconfirm": false,
+  "mailer_otp_length": 8,
+  "smtp_max_frequency": 60,
+  "mfa_totp_enroll_enabled": true,
+  "mfa_totp_verify_enabled": true
+}

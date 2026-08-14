@@ -23,7 +23,10 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   assert.match(workflow, /version:\s*2\.114\.0/);
   assert.match(workflow, /supabase link --project-ref "\$SUPABASE_PROJECT_ID"/);
   assert.match(workflow, /supabase db push/);
-  assert.match(workflow, /supabase config push --project-ref "\$SUPABASE_PROJECT_ID" --yes/);
+  assert.match(workflow, /https:\/\/api\.supabase\.com\/v1\/projects\/\$\{SUPABASE_PROJECT_ID\}\/config\/auth/);
+  assert.match(workflow, /--request PATCH/);
+  assert.match(workflow, /--data @supabase\/auth-production\.json/);
+  assert.doesNotMatch(workflow, /supabase config push/);
   assert.match(
     workflow,
     /supabase functions deploy feedback-api --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
@@ -43,7 +46,7 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   const feedback = workflow.indexOf("supabase functions deploy feedback-api");
   const creator = workflow.indexOf("supabase functions deploy creator-api");
   const tester = workflow.indexOf("supabase functions deploy tester-api");
-  const config = workflow.indexOf("supabase config push");
+  const config = workflow.indexOf("api.supabase.com/v1/projects/");
   const mcp = workflow.indexOf("supabase functions deploy project-builder-mcp");
 
   assert.ok(

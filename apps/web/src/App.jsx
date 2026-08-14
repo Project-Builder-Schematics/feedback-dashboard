@@ -123,9 +123,9 @@ function BetaJoinScreen({ client, session, sessionLoading }) {
     const hasOAuthCallback = ["code", "error", "error_code", "error_description"].some(
       (parameter) => callbackUrl.searchParams.has(parameter) || callbackHash.has(parameter),
     );
-    if (!hasOAuthCallback) return;
-
     const pendingInvite = window.sessionStorage.getItem(BETA_INVITE_STORAGE_KEY);
+    if (!hasOAuthCallback && !(pendingInvite && session)) return;
+
     window.sessionStorage.removeItem(BETA_INVITE_STORAGE_KEY);
     window.history.replaceState(
       window.history.state,
