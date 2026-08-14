@@ -34,7 +34,7 @@ test("deploys the tested Vite client to GitHub Pages on relevant pushes to main"
   assert.match(workflow, /VITE_SUPABASE_URL:\s*\$\{\{\s*vars\.SUPABASE_URL\s*\}\}/);
   assert.match(
     workflow,
-    /VITE_SUPABASE_PUBLISHABLE_KEY:\s*\$\{\{\s*vars\.SUPABASE_PUBLISHABLE_KEY\s*\}\}/,
+    /VITE_SUPABASE_PUBLISHABLE_KEY:\s*\$\{\{\s*secrets\.SUPABASE_PUBLISHABLE_KEY\s*\}\}/,
   );
 
   const install = workflow.indexOf("run: npm ci");
