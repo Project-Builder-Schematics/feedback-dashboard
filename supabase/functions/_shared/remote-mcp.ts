@@ -226,7 +226,7 @@ export function createRemoteAttachmentUploadLinkHandler({
     const structuredContent = attachmentUploadLinkOutputSchema.parse({
       reportId: session.reportId,
       uploadUrl: url.href,
-      expiresAt: session.expiresAt,
+      expiresAt: toUtcIsoDatetime(session.expiresAt),
       maxFiles: 5,
     });
 

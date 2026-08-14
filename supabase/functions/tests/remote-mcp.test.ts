@@ -273,7 +273,7 @@ test("creates a report-scoped upload link while storing only the capability hash
     store: {
       async createUploadSession(input: unknown) {
         calls.push(input);
-        return { reportId: "PB-42", expiresAt: "2026-08-14T07:50:00.000Z" };
+        return { reportId: "PB-42", expiresAt: "2026-08-14T20:50:00.123456+13:00" };
       },
     },
   });
@@ -290,7 +290,7 @@ test("creates a report-scoped upload link while storing only the capability hash
     reportId: "PB-42",
     uploadUrl:
       `https://project-builder-schematics.github.io/feedback-dashboard/?mode=upload#pb_upload_${"A".repeat(43)}`,
-    expiresAt: "2026-08-14T07:50:00.000Z",
+    expiresAt: "2026-08-14T07:50:00.123Z",
     maxFiles: 5,
   });
 });
