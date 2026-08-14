@@ -1,0 +1,7 @@
+node_modules/
+dist/
+qa/*.png
+!qa/dense-implementation-final.png
+!qa/dense-comparison-final.png
+!qa/dense-focused-detail-final.png
+.DS_Store
