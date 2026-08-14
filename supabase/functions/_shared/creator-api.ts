@@ -379,10 +379,12 @@ export function createSupabaseCreatorReportStore(
         .order("created_at", { ascending: true });
       if (attachmentError || !attachments) throw new Error("Unable to list report attachments.");
 
-      const signedUrls = await attachmentUrlSigner.createSignedUrls(
-        attachments.map((attachment) => attachment.object_path),
-        900,
-      );
+      const signedUrls = attachments.length === 0
+        ? []
+        : await attachmentUrlSigner.createSignedUrls(
+            attachments.map((attachment) => attachment.object_path),
+            900,
+          );
       const signedUrlByPath = new Map(signedUrls.map((item) => [item.path, item.signedUrl]));
       const attachmentsByReport = new Map<string, CreatorAttachment[]>();
       for (const attachment of attachments) {

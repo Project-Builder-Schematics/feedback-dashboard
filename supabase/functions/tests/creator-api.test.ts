@@ -168,8 +168,9 @@ test("rejects origins outside the exact CORS allowlist without authenticating", 
   assert.equal(authenticated, false);
 });
 
-test("lists reports with short-lived private attachment URLs without exposing object paths", async () => {
+test("lists reports with optional short-lived private attachment URLs without exposing object paths", async () => {
   const calls: unknown[] = [];
+  let attachmentRows = [attachmentRow];
   const store = createSupabaseCreatorReportStore(
     {
       from(table: string) {
@@ -211,7 +212,7 @@ test("lists reports with short-lived private attachment URLs without exposing ob
                     return {
                       async order(orderColumn: string, options: unknown) {
                         calls.push(["order-attachments", orderColumn, options]);
-                        return { data: [attachmentRow], error: null };
+                        return { data: attachmentRows, error: null };
                       },
                     };
                   },
@@ -261,6 +262,13 @@ test("lists reports with short-lived private attachment URLs without exposing ob
     },
   ]);
   assert.equal(JSON.stringify(result).includes("object_path"), false);
+
+  attachmentRows = [];
+  calls.length = 0;
+  const resultWithoutAttachments = await store.list();
+
+  assert.deepEqual(resultWithoutAttachments[0]?.attachments, []);
+  assert.equal(calls.some(([operation]) => operation === "sign"), false);
 });
 
 test("strictly rejects invalid status updates without writing an audit event", async () => {
