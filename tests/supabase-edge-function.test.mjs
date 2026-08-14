@@ -45,12 +45,18 @@ test("keeps tester onboarding JWT-verified and derives GitHub identity through a
     new URL("../supabase/functions/tester-api/index.ts", import.meta.url),
     "utf8",
   );
+  const githubIdentity = await readFile(
+    new URL("../supabase/functions/_shared/verified-github-identity.ts", import.meta.url),
+    "utf8",
+  );
   const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
 
   assert.match(config, /\[functions\.tester-api\]\s*\nverify_jwt\s*=\s*true/);
   assert.match(entrypoint, /auth\.getUser\(accessToken\)/);
   assert.match(entrypoint, /user\.identities/);
-  assert.match(entrypoint, /provider_id/);
+  assert.match(entrypoint, /verifiedGithubIdentity/);
+  assert.match(githubIdentity, /identity_data/);
+  assert.match(githubIdentity, /provider_id/);
   assert.match(entrypoint, /createSupabaseRateLimiter/);
   assert.match(entrypoint, /createSupabaseBetaMembershipStore/);
   assert.doesNotMatch(entrypoint, /user_metadata|email|login|avatar/);

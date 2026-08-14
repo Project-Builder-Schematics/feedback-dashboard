@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createSupabaseBetaMembershipStore, createTesterApiHandler } from "../_shared/tester-api.ts";
+import { verifiedGithubIdentity } from "../_shared/verified-github-identity.ts";
 
 const userId = "a59e96b4-51a4-4da9-9f28-19c807d7b785";
 const allowedOrigin = "https://project-builder-schematics.github.io";
@@ -24,6 +25,25 @@ function githubIdentity(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+test("normalizes the verified GitHub provider ID from Supabase identity data", () => {
+  assert.deepEqual(
+    verifiedGithubIdentity({
+      provider: "github",
+      user_id: userId,
+      identity_data: { provider_id: "12345678" },
+    }),
+    { provider: "github", user_id: userId, provider_id: "12345678" },
+  );
+  assert.equal(
+    verifiedGithubIdentity({
+      provider: "github",
+      user_id: userId,
+      identity_data: {},
+    }),
+    null,
+  );
+});
 
 function options(overrides: Record<string, unknown> = {}) {
   return {

@@ -5,6 +5,7 @@ import {
   createTesterApiHandler,
 } from "../_shared/tester-api.ts";
 import { createSupabaseRateLimiter } from "../_shared/rate-limit.ts";
+import { verifiedGithubIdentity } from "../_shared/verified-github-identity.ts";
 
 function requiredEnvironmentVariable(name: string) {
   const value = Deno.env.get(name)?.trim();
@@ -40,11 +41,10 @@ export default {
       return {
         userId: user.id,
         isAnonymous: user.is_anonymous === true,
-        identities: (user.identities ?? []).map((identity) => ({
-          provider: identity.provider,
-          user_id: identity.user_id,
-          provider_id: identity.provider_id,
-        })),
+        identities: (user.identities ?? []).flatMap((identity) => {
+          const verified = verifiedGithubIdentity(identity);
+          return verified ? [verified] : [];
+        }),
         rateLimiter: createSupabaseRateLimiter(supabase),
         store: createSupabaseBetaMembershipStore(supabase),
       };

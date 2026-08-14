@@ -9,6 +9,7 @@ import {
   createRemoteReportIssueHandler,
 } from "../_shared/remote-mcp.ts";
 import { createSupabaseRateLimiter } from "../_shared/rate-limit.ts";
+import { verifiedGithubIdentity } from "../_shared/verified-github-identity.ts";
 import {
   attachmentUploadLinkInputSchema,
   attachmentUploadLinkOutputSchema,
@@ -71,11 +72,10 @@ const fetchHandler = createRemoteMcpHttpHandler({
       email: user.email,
       userMetadata: user.user_metadata,
       claims,
-      identities: (user.identities ?? []).map((identity) => ({
-        provider: identity.provider,
-        user_id: identity.user_id,
-        provider_id: identity.provider_id,
-      })),
+      identities: (user.identities ?? []).flatMap((identity) => {
+        const verified = verifiedGithubIdentity(identity);
+        return verified ? [verified] : [];
+      }),
     };
   },
   hasActiveMembership: (reporter) => store.hasActiveMembership(reporter),
