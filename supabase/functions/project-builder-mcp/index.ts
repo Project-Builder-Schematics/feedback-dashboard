@@ -3,12 +3,18 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { createClient } from "@supabase/supabase-js";
 
 import {
+  createRemoteAttachmentUploadLinkHandler,
   createRemoteMcpDataStore,
   createRemoteMcpHttpHandler,
   createRemoteReportIssueHandler,
 } from "../_shared/remote-mcp.ts";
 import { createSupabaseRateLimiter } from "../_shared/rate-limit.ts";
-import { reportIssueInputSchema, reportIssueOutputSchema } from "../_shared/report-contracts.ts";
+import {
+  attachmentUploadLinkInputSchema,
+  attachmentUploadLinkOutputSchema,
+  reportIssueInputSchema,
+  reportIssueOutputSchema,
+} from "../_shared/report-contracts.ts";
 
 function requiredEnvironmentVariable(name: string) {
   const value = Deno.env.get(name)?.trim();
@@ -46,6 +52,7 @@ const supabase = createClient(supabaseUrl, secretKey, {
 });
 const rateLimiter = createSupabaseRateLimiter(supabase);
 const store = createRemoteMcpDataStore(supabase);
+const uploadPageUrl = requiredEnvironmentVariable("PB_UPLOAD_PAGE_URL");
 
 const fetchHandler = createRemoteMcpHttpHandler({
   resourceUrl,
@@ -86,6 +93,22 @@ const fetchHandler = createRemoteMcpHttpHandler({
         outputSchema: reportIssueOutputSchema,
       },
       createRemoteReportIssueHandler({ reporter, rateLimiter, store }),
+    );
+    server.registerTool(
+      "create_attachment_upload_link",
+      {
+        title: "Create an attachment upload link",
+        description:
+          "Create a temporary private browser link for attaching images or videos to a submitted report.",
+        inputSchema: attachmentUploadLinkInputSchema,
+        outputSchema: attachmentUploadLinkOutputSchema,
+      },
+      createRemoteAttachmentUploadLinkHandler({
+        reporter,
+        uploadPageUrl,
+        rateLimiter,
+        store,
+      }),
     );
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

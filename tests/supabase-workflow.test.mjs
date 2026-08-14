@@ -35,6 +35,10 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   assert.match(workflow, /supabase functions deploy tester-api --project-ref "\$SUPABASE_PROJECT_ID"/);
   assert.match(
     workflow,
+    /supabase functions deploy attachment-upload-api --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
+  );
+  assert.match(
+    workflow,
     /supabase functions deploy project-builder-mcp --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
   );
   assert.doesNotMatch(workflow, /ENABLE_CREATOR_API/);
@@ -46,6 +50,7 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   const feedback = workflow.indexOf("supabase functions deploy feedback-api");
   const creator = workflow.indexOf("supabase functions deploy creator-api");
   const tester = workflow.indexOf("supabase functions deploy tester-api");
+  const attachmentUpload = workflow.indexOf("supabase functions deploy attachment-upload-api");
   const config = workflow.indexOf("api.supabase.com/v1/projects/");
   const mcp = workflow.indexOf("supabase functions deploy project-builder-mcp");
 
@@ -55,6 +60,7 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
       config < feedback &&
       feedback < creator &&
       creator < tester &&
-      tester < mcp,
+      tester < attachmentUpload &&
+      attachmentUpload < mcp,
   );
 });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createRemoteAttachmentUploadLinkHandler,
   createRemoteMcpDataStore,
   createRemoteMcpHttpHandler,
   createRemoteReportIssueHandler,
@@ -245,9 +246,72 @@ test("persists only authenticated reporter provenance after a per-tool rate limi
   });
 });
 
+test("creates a report-scoped upload link while storing only the capability hash", async () => {
+  const calls: unknown[] = [];
+  const reporter = {
+    userId,
+    provider: "github" as const,
+    providerId: "12345678",
+    displayName: "Octo Tester",
+    email: null,
+  };
+  const handler = createRemoteAttachmentUploadLinkHandler({
+    reporter,
+    uploadPageUrl:
+      "https://project-builder-schematics.github.io/feedback-dashboard/?mode=upload",
+    now: () => new Date("2026-08-14T07:20:00.000Z"),
+    randomBytes: (length) => {
+      assert.equal(length, 32);
+      return new Uint8Array(length);
+    },
+    rateLimiter: {
+      async consume(...input: unknown[]) {
+        calls.push(input);
+        return { allowed: true, retryAfterSeconds: 0 };
+      },
+    },
+    store: {
+      async createUploadSession(input: unknown) {
+        calls.push(input);
+        return { reportId: "PB-42", expiresAt: "2026-08-14T07:50:00.000Z" };
+      },
+    },
+  });
+
+  const output = await handler({ reportId: "PB-42" });
+
+  assert.deepEqual(calls[0], ["mcp:upload-link", userId, 10, 3_600]);
+  const stored = calls[1] as Record<string, unknown>;
+  assert.equal(stored.reportId, "PB-42");
+  assert.equal(stored.reporterId, userId);
+  assert.match(String(stored.tokenHash), /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(JSON.stringify(stored), /pb_upload_/);
+  assert.deepEqual(output.structuredContent, {
+    reportId: "PB-42",
+    uploadUrl:
+      `https://project-builder-schematics.github.io/feedback-dashboard/?mode=upload#pb_upload_${"A".repeat(43)}`,
+    expiresAt: "2026-08-14T07:50:00.000Z",
+    maxFiles: 5,
+  });
+});
+
 test("queries active membership and inserts report attribution through the admin client", async () => {
   const calls: unknown[] = [];
   const store = createRemoteMcpDataStore({
+    rpc(name: string, input: Record<string, unknown>) {
+      calls.push(["rpc", name, input]);
+      return {
+        async single() {
+          return {
+            data: {
+              report_public_id: "PB-42",
+              expires_at: "2026-08-14T07:50:00.000Z",
+            },
+            error: null,
+          };
+        },
+      };
+    },
     from(table: string) {
       if (table === "beta_profiles") {
         const filters: unknown[] = [];
@@ -343,4 +407,24 @@ test("queries active membership and inserts report attribution through the admin
       reporter_email: null,
     },
   );
+
+  assert.deepEqual(
+    await store.createUploadSession({
+      reportId: "PB-42",
+      reporterId: userId,
+      tokenHash: "a".repeat(64),
+      expiresAt: "2026-08-14T07:50:00.000Z",
+    }),
+    { reportId: "PB-42", expiresAt: "2026-08-14T07:50:00.000Z" },
+  );
+  assert.deepEqual(calls.at(-1), [
+    "rpc",
+    "create_report_upload_session",
+    {
+      p_report_public_number: "42",
+      p_reporter_user_id: userId,
+      p_token_hash_hex: "a".repeat(64),
+      p_expires_at: "2026-08-14T07:50:00.000Z",
+    },
+  ]);
 });

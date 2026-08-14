@@ -2,12 +2,16 @@ import { PayloadTooLargeError, readBoundedJsonBody } from "./bounded-json.ts";
 import { exactCorsHeaders, parseExactOriginAllowlist } from "./exact-cors.ts";
 import type { RateLimiter } from "./rate-limit.ts";
 import {
+  attachmentUploadLinkInputSchema,
+  attachmentUploadLinkOutputSchema,
   reportIssueInputSchema,
   reportIssueOutputSchema,
   reportResponseSchema,
   type ReportIssueInput,
   type ReportResponse,
+  type AttachmentUploadLinkInput,
 } from "./report-contracts.ts";
+import { sha256Hex } from "./sha256.ts";
 
 interface OAuthIdentity {
   provider?: unknown;
@@ -33,6 +37,12 @@ export interface McpReporter {
 }
 
 interface RemoteMcpDataStore {
+  createUploadSession(input: {
+    reportId: string;
+    reporterId: string;
+    tokenHash: string;
+    expiresAt: string;
+  }): Promise<{ reportId: string; expiresAt: string }>;
   hasActiveMembership(reporter: McpReporter): Promise<boolean>;
   insertReport(report: ReportIssueInput, reporter: McpReporter): Promise<ReportResponse>;
 }
@@ -56,6 +66,9 @@ interface SupabaseClientLike {
       };
     };
   };
+  rpc(name: string, input: Record<string, unknown>): {
+    single(): PromiseLike<{ data: Record<string, unknown> | null; error: unknown }>;
+  };
 }
 
 interface MembershipQuery {
@@ -78,6 +91,15 @@ interface RemoteReportIssueOptions {
   reporter: McpReporter;
   rateLimiter: RateLimiter;
   store: Pick<RemoteMcpDataStore, "insertReport">;
+}
+
+interface RemoteAttachmentUploadLinkOptions {
+  reporter: McpReporter;
+  uploadPageUrl: string;
+  rateLimiter: RateLimiter;
+  store: Pick<RemoteMcpDataStore, "createUploadSession">;
+  now?: () => Date;
+  randomBytes?: (length: number) => Uint8Array;
 }
 
 function json(body: unknown, status: number, headers: Headers) {
@@ -167,8 +189,78 @@ export function createRemoteReportIssueHandler({
   };
 }
 
+function capabilityToken(randomBytes: (length: number) => Uint8Array) {
+  const bytes = randomBytes(32);
+  if (bytes.byteLength !== 32) throw new Error("Upload capability entropy is unavailable.");
+  const encoded = btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+  return `pb_upload_${encoded}`;
+}
+
+export function createRemoteAttachmentUploadLinkHandler({
+  reporter,
+  uploadPageUrl,
+  rateLimiter,
+  store,
+  now = () => new Date(),
+  randomBytes = (length) => crypto.getRandomValues(new Uint8Array(length)),
+}: RemoteAttachmentUploadLinkOptions) {
+  return async (input: AttachmentUploadLinkInput) => {
+    const { reportId } = attachmentUploadLinkInputSchema.parse(input);
+    const rateLimit = await rateLimiter.consume("mcp:upload-link", reporter.userId, 10, 3_600);
+    if (!rateLimit.allowed) throw new Error("Upload link creation is rate limited.");
+
+    const capability = capabilityToken(randomBytes);
+    const requestedExpiry = new Date(now().getTime() + 30 * 60_000).toISOString();
+    const session = await store.createUploadSession({
+      reportId,
+      reporterId: reporter.userId,
+      tokenHash: await sha256Hex(capability),
+      expiresAt: requestedExpiry,
+    });
+    const url = new URL(uploadPageUrl);
+    url.hash = capability;
+    const structuredContent = attachmentUploadLinkOutputSchema.parse({
+      reportId: session.reportId,
+      uploadUrl: url.href,
+      expiresAt: session.expiresAt,
+      maxFiles: 5,
+    });
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Open this private link to attach files to ${session.reportId}: ${url.href}`,
+        },
+      ],
+      structuredContent,
+    };
+  };
+}
+
 export function createRemoteMcpDataStore(supabase: SupabaseClientLike): RemoteMcpDataStore {
   return {
+    async createUploadSession(input) {
+      const publicNumber = input.reportId.slice(3);
+      const { data, error } = await supabase.rpc("create_report_upload_session", {
+        p_report_public_number: publicNumber,
+        p_reporter_user_id: input.reporterId,
+        p_token_hash_hex: input.tokenHash,
+        p_expires_at: input.expiresAt,
+      }).single();
+      if (
+        error ||
+        typeof data?.report_public_id !== "string" ||
+        typeof data?.expires_at !== "string"
+      ) {
+        throw new Error("Unable to create an upload session.");
+      }
+      return { reportId: data.report_public_id, expiresAt: data.expires_at };
+    },
+
     async hasActiveMembership(reporter) {
       const query = supabase.from("beta_profiles").select("user_id") as MembershipQuery;
       const { data, error } = await query

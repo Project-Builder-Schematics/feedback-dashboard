@@ -42,6 +42,18 @@ export const reportIssueOutputSchema = reportResponseSchema.pick({
   submittedAt: true,
 });
 
+export const attachmentUploadLinkInputSchema = z.object({
+  reportId: z.string().regex(/^PB-[1-9]\d*$/),
+}).strict();
+
+export const attachmentUploadLinkOutputSchema = z.object({
+  reportId: z.string().regex(/^PB-[1-9]\d*$/),
+  uploadUrl: z.url(),
+  expiresAt: z.iso.datetime(),
+  maxFiles: z.literal(5),
+});
+
 export type CreateReportRequest = z.infer<typeof createReportRequestSchema>;
 export type ReportIssueInput = z.infer<typeof reportIssueInputSchema>;
 export type ReportResponse = z.infer<typeof reportResponseSchema>;
+export type AttachmentUploadLinkInput = z.infer<typeof attachmentUploadLinkInputSchema>;

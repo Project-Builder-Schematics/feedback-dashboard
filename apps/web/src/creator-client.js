@@ -19,10 +19,6 @@ export function getSupabaseClient() {
   return browserClient;
 }
 
-export function magicLinkRedirect(baseUrl, origin) {
-  return new URL(baseUrl, origin).href;
-}
-
 export function betaJoinRedirect() {
   return "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join";
 }

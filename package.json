@@ -9,7 +9,7 @@
     "test": "npm run test:structure && npm run test:contracts && npm run test:api && npm run test:mcp && npm run test:supabase && npm run test:web && npm run test:pages && npm run test:sites",
     "test:structure": "node --test tests/monorepo-structure.test.mjs",
     "test:contracts": "tsx --test supabase/functions/tests/report-contracts.test.ts",
-    "test:api": "tsx --test supabase/functions/tests/feedback-api.test.ts supabase/functions/tests/creator-api.test.ts supabase/functions/tests/rate-limit.test.ts supabase/functions/tests/tester-api.test.ts supabase/functions/tests/remote-mcp.test.ts",
+    "test:api": "tsx --test supabase/functions/tests/feedback-api.test.ts supabase/functions/tests/creator-api.test.ts supabase/functions/tests/rate-limit.test.ts supabase/functions/tests/tester-api.test.ts supabase/functions/tests/remote-mcp.test.ts supabase/functions/tests/attachment-upload-api.test.ts",
     "test:mcp": "npm --workspace apps/mcp test",
     "test:supabase": "node --test tests/supabase-*.test.mjs",
     "test:web": "npm --workspace apps/web test",

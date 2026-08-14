@@ -76,6 +76,26 @@ test("deploys a stateless OAuth-protected MCP Edge Function", async () => {
   assert.match(entrypoint, /createRemoteMcpHttpHandler/);
   assert.match(entrypoint, /createRemoteMcpDataStore/);
   assert.match(entrypoint, /createRemoteReportIssueHandler/);
+  assert.match(entrypoint, /createRemoteAttachmentUploadLinkHandler/);
   assert.match(entrypoint, /reportIssueInputSchema/);
+  assert.match(entrypoint, /attachmentUploadLinkInputSchema/);
+  assert.match(entrypoint, /PB_UPLOAD_PAGE_URL/);
+  assert.doesNotMatch(entrypoint, /PB_FEEDBACK_TOKEN/);
+});
+
+test("deploys a capability-protected attachment upload Edge Function", async () => {
+  const entrypoint = await readFile(
+    new URL("../supabase/functions/attachment-upload-api/index.ts", import.meta.url),
+    "utf8",
+  );
+  const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
+
+  assert.match(config, /\[functions\.attachment-upload-api\]\s*\nverify_jwt\s*=\s*false/);
+  assert.match(entrypoint, /SUPABASE_URL/);
+  assert.match(entrypoint, /SUPABASE_SECRET_KEYS/);
+  assert.match(entrypoint, /PB_ALLOWED_ORIGINS/);
+  assert.match(entrypoint, /createAttachmentUploadApiHandler/);
+  assert.match(entrypoint, /createSignedUploadUrl/);
+  assert.match(entrypoint, /\.info\(/);
   assert.doesNotMatch(entrypoint, /PB_FEEDBACK_TOKEN/);
 });

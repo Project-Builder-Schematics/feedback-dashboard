@@ -9,7 +9,6 @@ import {
   betaJoinRedirect,
   decideOAuthAuthorization,
   loadOAuthAuthorization,
-  magicLinkRedirect,
   mapCreatorReport,
 } from "./creator-client.js";
 
@@ -40,6 +39,9 @@ function createClient({
   createInvite,
   redeem,
   authorizationDetails,
+  prepareAttachment,
+  completeAttachment,
+  uploadAttachment,
 } = {}) {
   let authListener = () => {};
   const signInWithOtp = vi.fn(async () => ({ data: {}, error: null }));
@@ -66,6 +68,24 @@ function createClient({
     return { error: null };
   });
   const invoke = vi.fn(async (name, options) => {
+    if (name === "attachment-upload-api") {
+      return options.body.action === "prepare"
+        ? prepareAttachment
+          ? prepareAttachment(options)
+          : {
+              data: {
+                attachmentId: "3ca92c31-28c7-4d65-afaf-8f5c8d91f183",
+                reportId: "PB-42",
+                bucket: "report-attachments",
+                path: "reports/report-id/attachment-id",
+                token: "signed-storage-token",
+              },
+              error: null,
+            }
+        : completeAttachment
+          ? completeAttachment(options)
+          : { data: { reportId: "PB-42", status: "ready" }, error: null };
+    }
     if (name === "tester-api") {
       return redeem
         ? redeem(options)
@@ -92,6 +112,10 @@ function createClient({
       : { data: { report: { ...reports[0], status: options.body.status } }, error: null };
   });
 
+  const uploadToSignedUrl = vi.fn(
+    uploadAttachment ?? (async () => ({ data: { path: "reports/report-id/attachment-id" }, error: null })),
+  );
+
   return {
     auth: {
       getSession: vi.fn(async () => ({ data: { session }, error: null })),
@@ -109,6 +133,9 @@ function createClient({
       },
     },
     functions: { invoke },
+    storage: {
+      from: vi.fn(() => ({ uploadToSignedUrl })),
+    },
   };
 }
 
@@ -120,12 +147,6 @@ afterEach(() => {
 });
 
 describe("Project Builder creator dashboard", () => {
-  it("keeps the GitHub Pages path in the magic-link redirect", () => {
-    expect(
-      magicLinkRedirect("/feedback-dashboard/", "https://project-builder-schematics.github.io"),
-    ).toBe("https://project-builder-schematics.github.io/feedback-dashboard/");
-  });
-
   it("keeps the join mode in the exact GitHub OAuth redirect", () => {
     expect(betaJoinRedirect("/wrong-path/", "http://localhost:5173")).toBe(
       "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",
@@ -189,24 +210,28 @@ describe("Project Builder creator dashboard", () => {
     expect(client.functions.invoke).not.toHaveBeenCalled();
   });
 
-  it("requests a magic link without creating unknown users and starts a client cooldown", async () => {
+  it("starts creator GitHub sign-in with the exact dashboard redirect", async () => {
     const user = userEvent.setup();
     const client = createClient();
     render(<App client={client} />);
 
-    const email = await screen.findByLabelText("Creator email");
-    await user.type(email, "creator@example.com");
-    await user.click(screen.getByRole("button", { name: "Send magic link" }));
+    await user.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
 
-    expect(client.auth.signInWithOtp).toHaveBeenCalledWith({
-      email: "creator@example.com",
+    expect(client.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "github",
       options: {
-        shouldCreateUser: false,
-        emailRedirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).href,
+        redirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).href,
       },
     });
-    expect(screen.getByRole("button", { name: /Try again in 60s/ }).disabled).toBe(true);
-    expect(screen.getByText(/if it has access/i)).toBeTruthy();
+    expect(client.auth.signInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("explains that GitHub identity does not grant creator access by itself", async () => {
+    render(<App client={createClient()} />);
+
+    expect(await screen.findByRole("heading", { name: "Creator sign in" })).toBeTruthy();
+    expect(screen.getByText(/approved creator accounts/i)).toBeTruthy();
+    expect(screen.queryByLabelText("Creator email")).toBeNull();
   });
 
   it("shows session loading, empty, and load-error states", async () => {
@@ -268,7 +293,7 @@ describe("Project Builder creator dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     expect(client.auth.signOut).toHaveBeenCalledTimes(1);
-    expect(await screen.findByLabelText("Creator email")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeTruthy();
     expect(screen.queryByText(reportDto.title)).toBeNull();
   });
 
@@ -344,6 +369,17 @@ describe("Project Builder creator dashboard", () => {
     });
   });
 
+  it("sets expectations for the beta onboarding handoff", async () => {
+    window.history.replaceState({}, "", "/feedback-dashboard/?mode=join");
+    render(<App client={createClient()} />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Join the Project Builder beta" }),
+    ).toBeTruthy();
+    expect(screen.getByText(/you'll return here automatically/i)).toBeTruthy();
+    expect(screen.getByText(/one-time invitation/i)).toBeTruthy();
+  });
+
   it("removes a pending invite and OAuth error material even without a session", async () => {
     const invite = `pb_inv_${"D".repeat(43)}`;
     window.sessionStorage.setItem(BETA_INVITE_STORAGE_KEY, invite);
@@ -390,6 +426,7 @@ describe("Project Builder creator dashboard", () => {
     render(<App client={client} />);
 
     expect(await screen.findByRole("heading", { name: "Beta access activated" })).toBeTruthy();
+    expect(screen.getByText(/return to your MCP client/i)).toBeTruthy();
     expect(window.sessionStorage.getItem(BETA_INVITE_STORAGE_KEY)).toBeNull();
     expect(client.functions.invoke).toHaveBeenCalledWith("tester-api", {
       method: "POST",
@@ -429,11 +466,132 @@ describe("Project Builder creator dashboard", () => {
 
     expect(await screen.findByRole("heading", { name: "Invitation could not be redeemed" })).toBeTruthy();
     expect(screen.queryByText(/expired invitation details/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try another invitation" })).toBeTruthy();
     unmount();
 
     window.history.replaceState({}, "", "/feedback-dashboard/?mode=join");
     render(<App client={createClient({ session: { user: { id: "tester" } } })} />);
     expect(await screen.findByLabelText("Beta invitation code")).toBeTruthy();
+  });
+
+  it("moves an upload capability out of the URL before showing the attachment screen", async () => {
+    const capability = `pb_upload_${"A".repeat(43)}`;
+    window.history.replaceState(
+      {},
+      "",
+      `/feedback-dashboard/?mode=upload#${capability}`,
+    );
+    render(<App client={createClient()} />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Add evidence to your report" }),
+    ).toBeTruthy();
+    expect(window.location.hash).toBe("");
+    expect(window.sessionStorage.getItem("project-builder-upload-capability")).toBe(capability);
+    expect(document.body.textContent).not.toContain(capability);
+    const input = screen.getByLabelText("Images or videos");
+    expect(input.multiple).toBe(true);
+    expect(input.accept).toBe("image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime");
+  });
+
+  it("rejects unsupported, oversized, and excessive attachment selections before upload", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      `/feedback-dashboard/?mode=upload#pb_upload_${"B".repeat(43)}`,
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    const client = createClient();
+    render(<App client={client} />);
+    const input = await screen.findByLabelText("Images or videos");
+    const unsupported = new File(["notes"], "notes.pdf", { type: "application/pdf" });
+    const oversized = new File(["video"], "large.mp4", { type: "video/mp4" });
+    Object.defineProperty(oversized, "size", { value: 50 * 1024 * 1024 + 1 });
+
+    await user.upload(input, [unsupported, oversized]);
+
+    expect(screen.getByText("notes.pdf").closest("li")?.textContent).toMatch(/not supported/i);
+    expect(screen.getByText("large.mp4").closest("li")?.textContent).toMatch(/50 MiB/i);
+    expect(screen.getByRole("button", { name: "Upload 2 files" }).disabled).toBe(true);
+    expect(client.functions.invoke).not.toHaveBeenCalledWith(
+      "attachment-upload-api",
+      expect.anything(),
+    );
+
+    const sixImages = Array.from(
+      { length: 6 },
+      (_, index) => new File(["image"], `screen-${index}.png`, { type: "image/png" }),
+    );
+    await user.upload(input, sixImages);
+    expect(screen.getByRole("alert").textContent).toMatch(/up to 5 files/i);
+  });
+
+  it("uploads selected files through signed URLs and clears the capability after completion", async () => {
+    const capability = `pb_upload_${"C".repeat(43)}`;
+    window.history.replaceState(
+      {},
+      "",
+      `/feedback-dashboard/?mode=upload#${capability}`,
+    );
+    const user = userEvent.setup();
+    const client = createClient();
+    render(<App client={client} />);
+    const input = await screen.findByLabelText("Images or videos");
+    const image = new File(["image"], "broken-screen.png", { type: "image/png" });
+
+    await user.upload(input, image);
+    await user.click(screen.getByRole("button", { name: "Upload 1 file" }));
+
+    expect(await screen.findByRole("heading", { name: "Evidence attached" })).toBeTruthy();
+    expect(screen.getByText(/PB-42/)).toBeTruthy();
+    expect(window.sessionStorage.getItem("project-builder-upload-capability")).toBeNull();
+    expect(client.functions.invoke).toHaveBeenNthCalledWith(1, "attachment-upload-api", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${capability}` },
+      body: {
+        action: "prepare",
+        fileName: "broken-screen.png",
+        contentType: "image/png",
+        sizeBytes: image.size,
+      },
+    });
+    expect(client.storage.from).toHaveBeenCalledWith("report-attachments");
+    expect(client.storage.from().uploadToSignedUrl).toHaveBeenCalledWith(
+      "reports/report-id/attachment-id",
+      "signed-storage-token",
+      image,
+      { contentType: "image/png" },
+    );
+    expect(client.functions.invoke).toHaveBeenNthCalledWith(2, "attachment-upload-api", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${capability}` },
+      body: {
+        action: "complete",
+        attachmentId: "3ca92c31-28c7-4d65-afaf-8f5c8d91f183",
+      },
+    });
+  });
+
+  it("keeps a failed file visible and retains the capability for recovery", async () => {
+    const capability = `pb_upload_${"D".repeat(43)}`;
+    window.history.replaceState(
+      {},
+      "",
+      `/feedback-dashboard/?mode=upload#${capability}`,
+    );
+    const user = userEvent.setup();
+    const client = createClient({
+      uploadAttachment: async () => ({ data: null, error: new Error("storage details") }),
+    });
+    render(<App client={client} />);
+    const input = await screen.findByLabelText("Images or videos");
+
+    await user.upload(input, new File(["image"], "broken.png", { type: "image/png" }));
+    await user.click(screen.getByRole("button", { name: "Upload 1 file" }));
+
+    expect(await screen.findByText("Upload failed")).toBeTruthy();
+    expect(screen.queryByText(/storage details/i)).toBeNull();
+    expect(window.sessionStorage.getItem("project-builder-upload-capability")).toBe(capability);
   });
 
   it("lets the creator create and explicitly copy a one-time 24-hour invitation", async () => {

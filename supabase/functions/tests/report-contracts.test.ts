@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  attachmentUploadLinkInputSchema,
+  attachmentUploadLinkOutputSchema,
   createReportRequestSchema,
   reportIssueInputSchema,
   reportResponseSchema,
@@ -93,4 +95,19 @@ test("does not accept caller-supplied reporter identity in MCP arguments", () =>
   ]) {
     assert.equal(reportIssueInputSchema.safeParse({ ...base, ...identity }).success, false);
   }
+});
+
+test("validates report-scoped attachment upload links", () => {
+  assert.equal(attachmentUploadLinkInputSchema.safeParse({ reportId: "PB-142" }).success, true);
+  assert.equal(attachmentUploadLinkInputSchema.safeParse({ reportId: "142" }).success, false);
+  assert.equal(
+    attachmentUploadLinkOutputSchema.safeParse({
+      reportId: "PB-142",
+      uploadUrl:
+        "https://project-builder-schematics.github.io/feedback-dashboard/?mode=upload#pb_upload_secret",
+      expiresAt: "2026-08-14T08:00:00.000Z",
+      maxFiles: 5,
+    }).success,
+    true,
+  );
 });

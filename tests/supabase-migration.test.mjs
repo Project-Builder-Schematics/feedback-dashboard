@@ -140,3 +140,29 @@ test("adds durable report provenance and resource-bound OAuth access tokens", as
   assert.match(migration, /grant execute.*supabase_auth_admin/is);
   assert.match(migration, /revoke all.*public, anon, authenticated/is);
 });
+
+test("adds private report attachments with hashed upload capabilities", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260815040000_add_report_attachments.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(migration, /insert into storage\.buckets/i);
+  assert.match(migration, /'report-attachments'/i);
+  assert.match(migration, /false.*52428800/is);
+  assert.match(migration, /image\/png.*image\/jpeg.*video\/mp4.*video\/webm/is);
+  assert.match(migration, /create table if not exists public\.report_upload_sessions/i);
+  assert.match(migration, /token_hash bytea not null unique/i);
+  assert.match(migration, /create table if not exists public\.report_attachments/i);
+  assert.match(migration, /status text not null.*pending.*ready.*failed/is);
+  assert.match(migration, /create or replace function public\.create_report_upload_session/i);
+  assert.match(migration, /create or replace function public\.prepare_report_attachment/i);
+  assert.match(migration, /create or replace function public\.complete_report_attachment/i);
+  assert.match(migration, /create or replace function public\.fail_report_attachment/i);
+  assert.match(migration, /for update/ig);
+  assert.match(migration, /count\(\*\).*< 5/is);
+  assert.match(migration, /enable row level security/ig);
+  assert.match(migration, /revoke all on table public\.report_upload_sessions from public, anon, authenticated/i);
+  assert.match(migration, /revoke all on table public\.report_attachments from public, anon, authenticated/i);
+  assert.doesNotMatch(migration, /create policy/i);
+});

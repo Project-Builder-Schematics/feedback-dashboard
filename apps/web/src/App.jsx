@@ -10,13 +10,26 @@ import {
   GithubLogo,
   Hammer,
   Lightning,
+  LockKey,
   MagnifyingGlass,
   Moon,
+  Paperclip,
+  ShieldCheck,
   Sparkle,
   Sun,
   TerminalWindow,
+  UploadSimple,
+  WarningCircle,
   XCircle,
 } from "@phosphor-icons/react";
+
+import {
+  ACCEPTED_ATTACHMENT_TYPES,
+  UPLOAD_CAPABILITY_STORAGE_KEY,
+  consumeUploadCapability,
+  uploadAttachmentFile,
+  validateAttachmentFiles,
+} from "./attachment-client.js";
 
 import {
   BETA_INVITE_STORAGE_KEY,
@@ -26,7 +39,6 @@ import {
   getSupabaseClient,
   loadCreatorReports,
   loadOAuthAuthorization,
-  magicLinkRedirect,
   redeemBetaInvite,
   saveCreatorReportStatus,
 } from "./creator-client.js";
@@ -49,61 +61,57 @@ function Platform({ name }) {
   return <span className="platform"><TerminalWindow size={14} weight="fill" />{name}</span>;
 }
 
+function AccessHeader({ icon: Icon, eyebrow, title, description }) {
+  return (
+    <header className="access-header">
+      <span className="brand-mark" aria-hidden="true"><Icon size={23} weight="fill" /></span>
+      <span className="eyebrow">{eyebrow}</span>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </header>
+  );
+}
+
 function AccessScreen({ client }) {
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
+  const [message, setMessage] = useState(null);
+  const [redirecting, setRedirecting] = useState(false);
 
-  useEffect(() => {
-    if (cooldown <= 0) return undefined;
-    const timer = window.setTimeout(() => setCooldown((value) => value - 1), 1_000);
-    return () => window.clearTimeout(timer);
-  }, [cooldown]);
-
-  const submit = async (event) => {
-    event.preventDefault();
-    if (sending || cooldown > 0) return;
-    setSending(true);
-    setMessage("");
-    const { error } = await client.auth.signInWithOtp({
-      email: email.trim(),
+  const beginGithubSignIn = async () => {
+    if (redirecting) return;
+    setRedirecting(true);
+    setMessage(null);
+    const { error } = await client.auth.signInWithOAuth({
+      provider: "github",
       options: {
-        shouldCreateUser: false,
-        emailRedirectTo: magicLinkRedirect(import.meta.env.BASE_URL, window.location.origin),
+        redirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).href,
       },
     });
-    setSending(false);
-    setCooldown(60);
-    setMessage(
-      error
-        ? "We couldn't send a sign-in link. Try again later."
-        : "Check your email for a sign-in link if it has access.",
-    );
+    if (error) {
+      setRedirecting(false);
+      setMessage({ tone: "error", text: "GitHub sign-in could not be started." });
+    }
   };
 
   return (
-    <main className="access-shell">
-      <section className="access-card">
-        <span className="brand-mark"><Lightning size={23} weight="fill" /></span>
-        <span className="eyebrow">Project Builder</span>
-        <h1>Creator feedback access</h1>
-        <p>Use the email address already provisioned for the creator dashboard.</p>
-        <form onSubmit={submit}>
-          <label htmlFor="creator-email">Creator email</label>
-          <input
-            id="creator-email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <button type="submit" disabled={sending || cooldown > 0}>
-            {sending ? "Sending…" : cooldown > 0 ? `Try again in ${cooldown}s` : "Send magic link"}
-          </button>
-        </form>
-        {message && <p className="access-message" role="status">{message}</p>}
+    <main className="access-shell auth-shell">
+      <section className="access-card auth-card">
+        <AccessHeader
+          icon={Lightning}
+          eyebrow="Creator dashboard"
+          title="Creator sign in"
+          description="Use GitHub to continue to the creator dashboard."
+        />
+        <button className="primary-button" type="button" disabled={redirecting} onClick={beginGithubSignIn}>
+          {redirecting ? <CircleNotch className="is-spinning" size={17} /> : <GithubLogo size={17} weight="fill" />}
+          <span>{redirecting ? "Opening GitHub…" : "Continue with GitHub"}</span>
+        </button>
+        <p className="field-help">Only approved creator accounts can open the dashboard.</p>
+        {message && (
+          <p className={`access-message ${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>
+            {message.tone === "error" ? <WarningCircle size={17} /> : <CheckCircle size={17} />}
+            <span>{message.text}</span>
+          </p>
+        )}
       </section>
     </main>
   );
@@ -170,32 +178,51 @@ function BetaJoinScreen({ client, session, sessionLoading }) {
   };
 
   if (sessionLoading || state === "redeeming") {
-    return <FullPageState title={state === "redeeming" ? "Activating beta access…" : "Checking access…"} />;
+    return (
+      <FullPageState
+        enhanced
+        busy
+        eyebrow="Project Builder beta"
+        title={state === "redeeming" ? "Activating beta access…" : "Checking access…"}
+        detail="Keep this tab open while we verify your GitHub account."
+      />
+    );
   }
   if (state === "success") {
     return (
       <FullPageState
+        enhanced
+        icon={CheckCircle}
+        tone="success"
+        eyebrow="Project Builder beta"
         title="Beta access activated"
-        detail="Your verified GitHub identity is now enrolled in the Project Builder beta."
+        detail="Your GitHub identity is enrolled. You can close this tab and return to your MCP client."
       />
     );
   }
   if (state === "failure") {
     return (
       <FullPageState
+        enhanced
+        icon={WarningCircle}
+        tone="error"
+        eyebrow="Project Builder beta"
         title="Invitation could not be redeemed"
-        detail="Request a new invitation from the Project Builder creator."
+        detail="The invitation may be invalid, expired, or already used. Ask the creator for a new one."
+        action={<button type="button" onClick={() => setState("form")}>Try another invitation</button>}
       />
     );
   }
 
   return (
-    <main className="access-shell">
-      <section className="access-card">
-        <span className="brand-mark"><GithubLogo size={23} weight="fill" /></span>
-        <span className="eyebrow">Project Builder beta</span>
-        <h1>Join with GitHub</h1>
-        <p>Your invitation is verified only after GitHub confirms your identity.</p>
+    <main className="access-shell auth-shell">
+      <section className="access-card auth-card">
+        <AccessHeader
+          icon={GithubLogo}
+          eyebrow="Project Builder beta"
+          title="Join the Project Builder beta"
+          description="Enter your invitation, continue to GitHub, and you'll return here automatically."
+        />
         <form onSubmit={beginGithubSignIn}>
           <label htmlFor="beta-invite-code">Beta invitation code</label>
           <input
@@ -203,12 +230,16 @@ function BetaJoinScreen({ client, session, sessionLoading }) {
             type="text"
             required
             autoComplete="off"
+            spellCheck="false"
+            aria-describedby="beta-invite-help"
             pattern="pb_inv_[A-Za-z0-9_-]{43}"
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
-          <button type="submit" disabled={state === "redirecting"}>
-            {state === "redirecting" ? "Redirecting…" : "Continue with GitHub"}
+          <span className="field-help" id="beta-invite-help">Use the one-time invitation sent by the creator.</span>
+          <button className="primary-button" type="submit" disabled={state === "redirecting"}>
+            {state === "redirecting" ? <CircleNotch className="is-spinning" size={17} /> : <GithubLogo size={17} weight="fill" />}
+            <span>{state === "redirecting" ? "Opening GitHub…" : "Continue with GitHub"}</span>
           </button>
         </form>
         {message && <p className="access-message" role="alert">{message}</p>}
@@ -281,25 +312,43 @@ function OAuthConsentScreen({ client, session, sessionLoading }) {
   };
 
   if (sessionLoading || state === "loading") {
-    return <FullPageState title="Checking authorization…" />;
+    return (
+      <FullPageState
+        enhanced
+        busy
+        eyebrow="Project Builder MCP"
+        title="Checking authorization…"
+        detail="Keep this tab open while we confirm the connection request."
+      />
+    );
   }
   if (state === "error") {
     return (
       <FullPageState
+        enhanced
+        icon={WarningCircle}
+        tone="error"
+        eyebrow="Project Builder MCP"
         title="Authorization request is invalid"
-        detail="Return to your MCP client and start the connection again."
+        detail="This request may have expired or already been used. Return to your MCP client and start the connection again."
       />
     );
   }
   if (!session || state === "sign-in") {
     return (
-      <main className="access-shell">
-        <section className="access-card">
-          <span className="brand-mark"><GithubLogo size={23} weight="fill" /></span>
-          <span className="eyebrow">Project Builder MCP</span>
-          <h1>Sign in to continue</h1>
-          <p>Use the GitHub account enrolled in the Project Builder beta.</p>
-          <button type="button" onClick={beginGithubSignIn}>Continue with GitHub</button>
+      <main className="access-shell auth-shell">
+        <section className="access-card auth-card">
+          <AccessHeader
+            icon={TerminalWindow}
+            eyebrow="Project Builder MCP"
+            title="Connect your MCP client"
+            description="Sign in with the GitHub account enrolled in the Project Builder beta."
+          />
+          <div className="access-note"><LockKey size={18} /><span>GitHub confirms your identity; your password is never shared with Project Builder.</span></div>
+          <button className="primary-button full-width" type="button" disabled={state === "redirecting"} onClick={beginGithubSignIn}>
+            {state === "redirecting" ? <CircleNotch className="is-spinning" size={17} /> : <GithubLogo size={17} weight="fill" />}
+            <span>{state === "redirecting" ? "Opening GitHub…" : "Continue with GitHub"}</span>
+          </button>
           {message && <p className="access-message" role="alert">{message}</p>}
         </section>
       </main>
@@ -308,23 +357,178 @@ function OAuthConsentScreen({ client, session, sessionLoading }) {
 
   const scopes = authorization.scope.split(/\s+/).filter(Boolean);
   return (
-    <main className="access-shell">
-      <section className="access-card">
-        <span className="brand-mark"><TerminalWindow size={23} weight="fill" /></span>
-        <span className="eyebrow">Project Builder MCP</span>
-        <h1>Authorize {authorization.client.name}</h1>
-        <p>This application wants to connect to Project Builder as your beta tester account.</p>
-        <dl>
+    <main className="access-shell auth-shell">
+      <section className="access-card auth-card consent-card">
+        <AccessHeader
+          icon={ShieldCheck}
+          eyebrow="Project Builder MCP"
+          title={`Authorize ${authorization.client.name}`}
+          description="Review what this MCP client can access before you continue."
+        />
+        <dl className="consent-details">
           <dt>Requested access</dt>
-          <dd>{scopes.map((scope) => <span key={scope}>{scope}</span>)}</dd>
+          <dd className="scope-list">{scopes.map((scope) => <span key={scope}>{scope}</span>)}</dd>
           <dt>Return address</dt>
           <dd><code>{authorization.redirect_uri}</code></dd>
         </dl>
-        <button type="button" disabled={state === "redirecting"} onClick={() => decide("approve")}>
-          {state === "redirecting" ? "Redirecting…" : "Authorize"}
-        </button>
-        <button className="secondary-button" type="button" disabled={state === "redirecting"} onClick={() => decide("deny")}>Deny</button>
+        <div className="access-note"><ShieldCheck size={18} /><span>You can revoke this connection later from your MCP client.</span></div>
+        <div className="access-actions">
+          <button className="primary-button" type="button" disabled={state === "redirecting"} onClick={() => decide("approve")}>
+            {state === "redirecting" ? <CircleNotch className="is-spinning" size={17} /> : <CheckCircle size={17} />}
+            <span>{state === "redirecting" ? "Authorizing…" : "Allow access"}</span>
+          </button>
+          <button className="secondary-button" type="button" disabled={state === "redirecting"} onClick={() => decide("deny")}>Cancel</button>
+        </div>
         {message && <p className="access-message" role="alert">{message}</p>}
+      </section>
+    </main>
+  );
+}
+
+const UPLOAD_STATUS_LABELS = {
+  ready: "Ready to upload",
+  preparing: "Preparing secure upload…",
+  uploading: "Uploading…",
+  finalizing: "Securing attachment…",
+  complete: "Attached",
+  error: "Upload failed",
+};
+
+function AttachmentUploadScreen({ client }) {
+  const [capability] = useState(() =>
+    consumeUploadCapability({
+      location: window.location,
+      history: window.history,
+      storage: window.sessionStorage,
+    }),
+  );
+  const [entries, setEntries] = useState([]);
+  const [selectionError, setSelectionError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [reportId, setReportId] = useState("");
+  const [batchError, setBatchError] = useState("");
+
+  const updateEntry = (id, status, message = UPLOAD_STATUS_LABELS[status]) => {
+    setEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, status, message } : entry)),
+    );
+  };
+
+  const selectFiles = (event) => {
+    const selection = validateAttachmentFiles(event.target.files);
+    setEntries(selection.entries);
+    setSelectionError(selection.selectionError);
+    setBatchError("");
+  };
+
+  const uploadFiles = async () => {
+    if (!capability || entries.length === 0 || entries.some((entry) => entry.status === "error")) {
+      return;
+    }
+
+    setUploading(true);
+    setBatchError("");
+    let failed = false;
+    let attachedReportId = "";
+    for (const entry of entries) {
+      try {
+        attachedReportId = await uploadAttachmentFile(
+          client,
+          capability,
+          entry.file,
+          (status) => updateEntry(entry.id, status),
+        );
+      } catch {
+        failed = true;
+        updateEntry(entry.id, "error");
+      }
+    }
+    setUploading(false);
+    if (failed) {
+      setBatchError("Some files couldn't be attached. Request a new upload link from your MCP client before retrying.");
+      return;
+    }
+
+    window.sessionStorage.removeItem(UPLOAD_CAPABILITY_STORAGE_KEY);
+    setReportId(attachedReportId);
+  };
+
+  if (!capability) {
+    return (
+      <FullPageState
+        enhanced
+        icon={WarningCircle}
+        tone="error"
+        eyebrow="Project Builder evidence"
+        title="Upload link is unavailable"
+        detail="Return to your MCP client and request a new attachment link."
+      />
+    );
+  }
+
+  if (reportId) {
+    return (
+      <FullPageState
+        enhanced
+        icon={CheckCircle}
+        tone="success"
+        eyebrow="Project Builder evidence"
+        title="Evidence attached"
+        detail={`Your files are securely attached to ${reportId}. You can close this tab and return to your MCP client.`}
+      />
+    );
+  }
+
+  const hasInvalidFiles = entries.some((entry) => entry.status === "error");
+  const fileCount = entries.length;
+  return (
+    <main className="access-shell auth-shell">
+      <section className="access-card auth-card upload-card">
+        <AccessHeader
+          icon={Paperclip}
+          eyebrow="Project Builder evidence"
+          title="Add evidence to your report"
+          description="Attach screenshots or short recordings that make the issue easier to reproduce."
+        />
+        <div className="access-note"><LockKey size={18} /><span>This private link is temporary. Files are stored in a private report folder.</span></div>
+        <label className="upload-picker" htmlFor="report-attachments">
+          <UploadSimple size={24} />
+          <strong>Images or videos</strong>
+          <span>Choose up to 5 files</span>
+        </label>
+        <input
+          className="visually-hidden"
+          id="report-attachments"
+          type="file"
+          aria-label="Images or videos"
+          multiple
+          accept={ACCEPTED_ATTACHMENT_TYPES.join(",")}
+          disabled={uploading}
+          onChange={selectFiles}
+        />
+        <p className="upload-limits">Images up to 10 MiB · Videos up to 50 MiB</p>
+        {selectionError && <p className="access-message error" role="alert"><WarningCircle size={17} /><span>{selectionError}</span></p>}
+        {entries.length > 0 && (
+          <ul className="upload-list" aria-label="Selected files">
+            {entries.map((entry) => (
+              <li className={entry.status === "error" ? "error" : ""} key={entry.id}>
+                <Paperclip size={17} aria-hidden="true" />
+                <span><strong>{entry.file.name}</strong><small aria-live="polite">{entry.message}</small></span>
+                {entry.status === "complete" ? <CheckCircle size={18} weight="fill" /> : entry.status === "error" ? <WarningCircle size={18} weight="fill" /> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {batchError && <p className="access-message error" role="alert"><WarningCircle size={17} /><span>{batchError}</span></p>}
+        <button
+          className="primary-button full-width upload-submit"
+          type="button"
+          disabled={uploading || fileCount === 0 || hasInvalidFiles}
+          onClick={uploadFiles}
+        >
+          {uploading ? <CircleNotch className="is-spinning" size={17} /> : <UploadSimple size={17} />}
+          <span>{uploading ? "Uploading files…" : `Upload ${fileCount} ${fileCount === 1 ? "file" : "files"}`}</span>
+        </button>
       </section>
     </main>
   );
@@ -375,11 +579,16 @@ function BetaInviteControl({ client }) {
   );
 }
 
-function FullPageState({ title, detail, action }) {
+function FullPageState({ title, detail, action, icon: Icon = CircleNotch, tone = "neutral", busy = false, eyebrow, enhanced = false }) {
   return (
-    <main className="access-shell">
-      <section className="access-card state-card">
-        <CircleNotch size={26} />
+    <main className={`access-shell${enhanced ? " auth-shell" : ""}`}>
+      <section
+        className={`access-card state-card ${tone}${enhanced ? " auth-card" : ""}`}
+        role={enhanced ? (tone === "error" ? "alert" : "status") : undefined}
+        aria-live={enhanced ? "polite" : undefined}
+      >
+        <Icon className={busy ? "is-spinning" : ""} size={30} weight={tone === "neutral" ? "regular" : "fill"} aria-hidden="true" />
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
         <h1>{title}</h1>
         {detail && <p>{detail}</p>}
         {action}
@@ -389,7 +598,9 @@ function FullPageState({ title, detail, action }) {
 }
 
 export function App({ client = getSupabaseClient() }) {
-  const joinMode = new URLSearchParams(window.location.search).get("mode") === "join";
+  const mode = new URLSearchParams(window.location.search).get("mode");
+  const joinMode = mode === "join";
+  const uploadMode = mode === "upload";
   const consentMode = window.location.pathname.endsWith("/oauth/consent/");
   const [sessionLoading, setSessionLoading] = useState(true);
   const [session, setSession] = useState(null);
@@ -429,7 +640,7 @@ export function App({ client = getSupabaseClient() }) {
   }, [client]);
 
   useEffect(() => {
-    if (!session || joinMode || consentMode) return;
+    if (!session || joinMode || uploadMode || consentMode) return;
     let active = true;
     setReportsState("loading");
     loadCreatorReports(client).then(
@@ -447,7 +658,7 @@ export function App({ client = getSupabaseClient() }) {
     return () => {
       active = false;
     };
-  }, [client, consentMode, joinMode, session]);
+  }, [client, consentMode, joinMode, session, uploadMode]);
 
   const selected = reports.find((report) => report.reportId === selectedId) ?? reports[0];
   const counts = useMemo(
@@ -474,6 +685,9 @@ export function App({ client = getSupabaseClient() }) {
 
   if (joinMode) {
     return <BetaJoinScreen client={client} session={session} sessionLoading={sessionLoading} />;
+  }
+  if (uploadMode) {
+    return <AttachmentUploadScreen client={client} />;
   }
   if (consentMode) {
     return <OAuthConsentScreen client={client} session={session} sessionLoading={sessionLoading} />;

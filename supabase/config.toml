@@ -10,6 +10,9 @@ verify_jwt = true
 [functions.project-builder-mcp]
 verify_jwt = false
 
+[functions.attachment-upload-api]
+verify_jwt = false
+
 [auth]
 site_url = "https://project-builder-schematics.github.io"
 additional_redirect_urls = [
