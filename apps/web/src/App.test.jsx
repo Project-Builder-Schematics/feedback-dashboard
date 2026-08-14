@@ -51,6 +51,7 @@ const videoAttachment = {
 
 function createClient({
   session = null,
+  userError = null,
   reports = [],
   listError = null,
   patch,
@@ -85,6 +86,11 @@ function createClient({
     authListener("SIGNED_OUT", null);
     return { error: null };
   });
+  const getUser = vi.fn(async () =>
+    userError
+      ? { data: { user: null }, error: userError }
+      : { data: { user: session?.user ?? null }, error: null }
+  );
   const invoke = vi.fn(async (name, options) => {
     if (name === "attachment-upload-api") {
       return options.body.action === "prepare"
@@ -137,6 +143,7 @@ function createClient({
   return {
     auth: {
       getSession: vi.fn(async () => ({ data: { session }, error: null })),
+      getUser,
       onAuthStateChange: vi.fn((listener) => {
         authListener = listener;
         return { data: { subscription: { unsubscribe: vi.fn() } } };
@@ -226,6 +233,24 @@ describe("Project Builder creator dashboard", () => {
     expect(screen.getByText("http://127.0.0.1:1455/callback")).toBeTruthy();
     expect(client.auth.oauth.getAuthorizationDetails).toHaveBeenCalledWith("authorization-123");
     expect(client.functions.invoke).not.toHaveBeenCalled();
+  });
+
+  it("clears a stale deleted-user session before loading MCP authorization", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/feedback-dashboard/oauth/consent/?authorization_id=authorization-123",
+    );
+    const client = createClient({
+      session: { user: { id: "deleted-tester" } },
+      userError: { status: 403, code: "bad_jwt", message: "User from sub claim in JWT does not exist" },
+    });
+    render(<App client={client} />);
+
+    expect(await screen.findByRole("button", { name: "Continue with GitHub" })).toBeTruthy();
+    expect(client.auth.getUser).toHaveBeenCalledTimes(1);
+    expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(client.auth.oauth.getAuthorizationDetails).not.toHaveBeenCalled();
   });
 
   it("starts creator GitHub sign-in with the exact dashboard redirect", async () => {

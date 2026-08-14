@@ -278,8 +278,17 @@ function OAuthConsentScreen({ client, session, sessionLoading }) {
 
     let active = true;
     setState("loading");
-    loadOAuthAuthorization(client, authorizationId).then(
-      (details) => {
+    const loadAuthorization = async () => {
+      const { data: { user }, error } = await client.auth.getUser();
+      if (!active) return;
+      if (error || !user) {
+        await client.auth.signOut({ scope: "local" });
+        if (active) setState("sign-in");
+        return;
+      }
+
+      try {
+        const details = await loadOAuthAuthorization(client, authorizationId);
         if (!active) return;
         if ("redirect_url" in details) {
           window.location.assign(details.redirect_url);
@@ -287,11 +296,11 @@ function OAuthConsentScreen({ client, session, sessionLoading }) {
         }
         setAuthorization(details);
         setState("ready");
-      },
-      () => {
+      } catch {
         if (active) setState("error");
-      },
-    );
+      }
+    };
+    loadAuthorization();
     return () => {
       active = false;
     };
