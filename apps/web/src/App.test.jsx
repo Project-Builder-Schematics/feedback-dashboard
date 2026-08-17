@@ -404,6 +404,40 @@ describe("Project Builder creator dashboard", () => {
     expect(screen.getByText("No durable activity is available yet.")).toBeTruthy();
   });
 
+  it("focuses the global search from the advertised keyboard shortcut", async () => {
+    const user = userEvent.setup();
+    render(<App client={createClient({ session: { user: { id: "creator" } }, reports: [reportDto] })} />);
+
+    await screen.findByRole("heading", { name: reportDto.title });
+    await user.keyboard("{Control>}k{/Control}");
+
+    expect(document.activeElement).toBe(screen.getByPlaceholderText("Search feedback, testers, versions…"));
+  });
+
+  it("does not show a report from another status when the active queue is empty", async () => {
+    const user = userEvent.setup();
+    render(<App client={createClient({ session: { user: { id: "creator" } }, reports: [reportDto] })} />);
+
+    await screen.findByRole("heading", { name: reportDto.title });
+    await user.click(screen.getByRole("button", { name: "Resolved 0 reports" }));
+
+    expect(screen.getByText("No reports in Resolved")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: reportDto.title })).toBeNull();
+  });
+
+  it("supports the mobile queue-to-detail navigation model", async () => {
+    const user = userEvent.setup();
+    render(<App client={createClient({ session: { user: { id: "creator" } }, reports: [reportDto] })} />);
+
+    await screen.findByRole("heading", { name: reportDto.title });
+    const workspace = document.querySelector(".workspace");
+    await user.click(screen.getByRole("button", { name: `${reportDto.title}, High severity` }));
+    expect(workspace.className).toContain("show-detail");
+
+    await user.click(screen.getByRole("button", { name: "Back to queue" }));
+    expect(workspace.className).toContain("show-queue");
+  });
+
   it("clears loaded reports when the creator logs out", async () => {
     const user = userEvent.setup();
     const client = createClient({ session: { user: { id: "creator" } }, reports: [reportDto] });

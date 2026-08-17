@@ -712,6 +712,19 @@ export function App({ client = getSupabaseClient() }) {
   const [mutationError, setMutationError] = useState("");
   const [saving, setSaving] = useState(false);
   const [theme, setTheme] = useState("light");
+  const [mobilePane, setMobilePane] = useState("queue");
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    const focusSearch = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -757,7 +770,6 @@ export function App({ client = getSupabaseClient() }) {
     };
   }, [applyMode, client, consentMode, joinMode, session, uploadMode]);
 
-  const selected = reports.find((report) => report.reportId === selectedId) ?? reports[0];
   const counts = useMemo(
     () =>
       Object.fromEntries(
@@ -779,6 +791,7 @@ export function App({ client = getSupabaseClient() }) {
       }),
     [filter, query, reports],
   );
+  const selected = visibleReports.find((report) => report.reportId === selectedId) ?? visibleReports[0] ?? null;
 
   if (joinMode) {
     return <BetaJoinScreen client={client} session={session} sessionLoading={sessionLoading} />;
@@ -807,6 +820,7 @@ export function App({ client = getSupabaseClient() }) {
   const selectFilter = (status) => {
     setFilter(status);
     setQuery("");
+    setMobilePane("queue");
     const firstMatch = reports.find((report) => report.status === status);
     if (firstMatch) setSelectedId(firstMatch.reportId);
   };
@@ -854,8 +868,8 @@ export function App({ client = getSupabaseClient() }) {
         </a>
         <label className="global-search">
           <MagnifyingGlass size={17} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search feedback, testers, versions…" />
-          <kbd>⌘ K</kbd>
+          <input ref={searchRef} value={query} onChange={(event) => { setQuery(event.target.value); setMobilePane("queue"); }} placeholder="Search feedback, testers, versions…" />
+          <kbd>{navigator.platform?.includes("Mac") ? "⌘" : "Ctrl"} K</kbd>
         </label>
         <div className="topbar-actions">
           <span className="connection"><Database size={16} />Supabase <i></i></span>
@@ -868,7 +882,7 @@ export function App({ client = getSupabaseClient() }) {
         </div>
       </header>
 
-      <main className="workspace" id="top">
+      <main className={`workspace show-${mobilePane}`} id="top">
         <aside className="queue-panel">
           <div className="queue-title"><div><span className="eyebrow">Beta program</span><h1>Feedback queue</h1></div><div><BetaApplicationsControl client={client} /><BetaInviteControl client={client} /></div></div>
           <nav className="status-filters" aria-label="Feedback states">
@@ -881,7 +895,7 @@ export function App({ client = getSupabaseClient() }) {
           <div className="queue-summary"><span>{filter}</span><small>{visibleReports.length} report{visibleReports.length === 1 ? "" : "s"}</small></div>
           <div className="report-list" aria-label="Feedback queue">
             {visibleReports.map((report) => (
-              <button type="button" className={`report-row ${selected.reportId === report.reportId ? "selected" : ""}`} key={report.reportId} onClick={() => setSelectedId(report.reportId)} aria-label={`${report.title}, ${report.severity} severity`}>
+              <button type="button" className={`report-row ${selected?.reportId === report.reportId ? "selected" : ""}`} key={report.reportId} onClick={() => { setSelectedId(report.reportId); setMobilePane("detail"); }} aria-label={`${report.title}, ${report.severity} severity`}>
                 <span className="report-row-top"><small>{report.id}</small><em className={`severity ${report.severity.toLowerCase()}`}>{report.severity}</em></span>
                 <strong>{report.title}</strong>
                 <span className="report-row-meta"><span>{report.tester} · {report.version}</span><time>{report.age}</time></span>
@@ -893,8 +907,8 @@ export function App({ client = getSupabaseClient() }) {
           <footer className="queue-footer"><span>Loaded from Supabase</span><span><i></i>MCP connected</span></footer>
         </aside>
 
-        <article className="report-detail">
-          <div className="detail-topline"><button className="back-button" type="button"><ArrowLeft size={15} /> Back to queue</button></div>
+        {selected ? <article className="report-detail">
+          <div className="detail-topline"><button className="back-button" type="button" onClick={() => setMobilePane("queue")}><ArrowLeft size={15} /> Back to queue</button></div>
           <header className="report-header">
             <div className="report-heading">
               <h1>{selected.title}</h1>
@@ -996,7 +1010,12 @@ export function App({ client = getSupabaseClient() }) {
               <div className="not-provided-inline">No durable activity is available yet.</div>
             </section>
           </div>
-        </article>
+        </article> : <section className="detail-empty" aria-live="polite">
+          <span className="detail-empty-icon"><MagnifyingGlass size={22} /></span>
+          <h2>{query ? "No matching feedback" : `No reports in ${filter}`}</h2>
+          <p>{query ? "Try a different search term or clear the search." : "Choose another status to keep reviewing the queue."}</p>
+          {query && <button type="button" className="secondary-button" onClick={() => setQuery("")}>Clear search</button>}
+        </section>}
       </main>
 
       {discardOpen && (

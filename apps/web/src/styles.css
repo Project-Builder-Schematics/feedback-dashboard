@@ -711,6 +711,47 @@ kbd {
   grid-template-columns: 384px minmax(0, 1fr);
 }
 
+.auth-card > .field-help {
+  display: block;
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.detail-empty {
+  min-height: calc(100vh - 62px);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 40px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.detail-empty-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-1);
+  color: var(--accent);
+}
+
+.detail-empty h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.detail-empty p {
+  max-width: 40ch;
+  margin: 7px 0 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .queue-panel {
   height: calc(100vh - 62px);
   min-height: 620px;
@@ -1828,25 +1869,36 @@ a.attachment-preview:hover img {
     display: block;
   }
 
+  .workspace.show-queue .report-detail,
+  .workspace.show-queue .detail-empty,
+  .workspace.show-detail .queue-panel {
+    display: none;
+  }
+
   .queue-panel {
     height: auto;
     min-height: 0;
-    max-height: 470px;
+    max-height: none;
     position: static;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .report-list {
-    max-height: 200px;
+    max-height: none;
+    overflow: visible;
   }
 
   .report-row {
-    min-height: 145px;
+    min-height: 118px;
   }
 
   .report-detail {
     padding: 14px 18px 46px;
+  }
+
+  .detail-empty {
+    min-height: calc(100vh - 62px);
   }
 
   .steps-section ol {
