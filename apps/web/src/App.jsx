@@ -19,6 +19,7 @@ import {
   Sun,
   TerminalWindow,
   UploadSimple,
+  UsersThree,
   WarningCircle,
   XCircle,
 } from "@phosphor-icons/react";
@@ -608,6 +609,18 @@ function BetaApplicationsControl({ client }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState("idle");
   const [approvingId, setApprovingId] = useState(null);
+  useEffect(() => {
+    let active = true;
+    loadBetaApplications(client).then(
+      (loadedApplications) => {
+        if (active) setApplications(loadedApplications);
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [client]);
   const load = async () => {
     setOpen(true);
     setState("loading");
@@ -631,7 +644,11 @@ function BetaApplicationsControl({ client }) {
   };
   const pending = applications.filter((item) => item.status === "pending");
   return <section className="beta-control" aria-label="Beta applications">
-    <button className="secondary-button" type="button" onClick={load}>Review applications</button>
+    <button className="beta-review-button" type="button" onClick={load} aria-label={`Review beta testers${pending.length ? `, ${pending.length} pending` : ""}`}>
+      <UsersThree size={16} weight="duotone" />
+      <span>Review beta testers</span>
+      {pending.length > 0 && <b aria-hidden="true">{pending.length}</b>}
+    </button>
     {open && <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !approvingId) setOpen(false); }}>
       <section className="applications-dialog" role="dialog" aria-modal="true" aria-labelledby="applications-title">
         <header className="applications-dialog-header">
@@ -884,7 +901,8 @@ export function App({ client = getSupabaseClient() }) {
 
       <main className={`workspace show-${mobilePane}`} id="top">
         <aside className="queue-panel">
-          <div className="queue-title"><div><span className="eyebrow">Beta program</span><h1>Feedback queue</h1></div><div><BetaApplicationsControl client={client} /><BetaInviteControl client={client} /></div></div>
+          <div className="queue-title"><div><span className="eyebrow">Beta program</span><h1>Feedback queue</h1></div></div>
+          <div className="queue-program-actions"><BetaApplicationsControl client={client} /><BetaInviteControl client={client} /></div>
           <nav className="status-filters" aria-label="Feedback states">
             {STATUS_ORDER.map((status) => (
               <button type="button" key={status} className={filter === status ? "active" : ""} onClick={() => selectFilter(status)} aria-label={`${status} ${counts[status]} reports`}>

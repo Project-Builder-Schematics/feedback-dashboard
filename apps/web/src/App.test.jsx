@@ -210,7 +210,8 @@ describe("Project Builder creator dashboard", () => {
     render(<App client={client} />);
 
     await screen.findByRole("heading", { name: reportDto.title });
-    await user.click(screen.getByRole("button", { name: "Review applications" }));
+    const reviewButton = await screen.findByRole("button", { name: "Review beta testers, 1 pending" });
+    await user.click(reviewButton);
 
     const dialog = await screen.findByRole("dialog", { name: "Beta applications" });
     expect(within(dialog).getByText("tester@example.com")).toBeTruthy();
