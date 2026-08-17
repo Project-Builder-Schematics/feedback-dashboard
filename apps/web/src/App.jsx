@@ -604,7 +604,7 @@ function BetaInviteControl({ client }) {
   );
 }
 
-function BetaApplicationsControl({ client }) {
+function BetaApplicationsControl({ client, onOpen }) {
   const [applications, setApplications] = useState([]);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState("idle");
@@ -622,6 +622,7 @@ function BetaApplicationsControl({ client }) {
     };
   }, [client]);
   const load = async () => {
+    onOpen?.();
     setOpen(true);
     setState("loading");
     try {
@@ -644,7 +645,7 @@ function BetaApplicationsControl({ client }) {
   };
   const pending = applications.filter((item) => item.status === "pending");
   return <section className="beta-control" aria-label="Beta applications">
-    <button className="beta-review-button" type="button" onClick={load} aria-label={`Review beta testers${pending.length ? `, ${pending.length} pending` : ""}`}>
+    <button className="beta-review-button" type="button" onClick={load} aria-expanded={open} aria-label={`Review beta testers${pending.length ? `, ${pending.length} pending` : ""}`}>
       <UsersThree size={16} weight="duotone" />
       <span>Review beta testers</span>
       {pending.length > 0 && <b aria-hidden="true">{pending.length}</b>}
@@ -902,7 +903,7 @@ export function App({ client = getSupabaseClient() }) {
       <main className={`workspace show-${mobilePane}`} id="top">
         <aside className="queue-panel">
           <div className="queue-title"><div><span className="eyebrow">Beta program</span><h1>Feedback queue</h1></div></div>
-          <div className="queue-program-actions"><BetaApplicationsControl client={client} /><BetaInviteControl client={client} /></div>
+          <div className="queue-program-actions"><BetaApplicationsControl client={client} onOpen={() => setStatusMenuOpen(false)} /><BetaInviteControl client={client} /></div>
           <nav className="status-filters" aria-label="Feedback states">
             {STATUS_ORDER.map((status) => (
               <button type="button" key={status} className={filter === status ? "active" : ""} onClick={() => selectFilter(status)} aria-label={`${status} ${counts[status]} reports`}>

@@ -220,6 +220,21 @@ describe("Project Builder creator dashboard", () => {
     expect(await within(dialog).findByText("Approved · Email sent")).toBeTruthy();
   });
 
+  it("closes the status chooser before opening the beta tester review dialog", async () => {
+    const user = userEvent.setup();
+    const client = createClient({ session: { user: { id: "creator" } }, reports: [reportDto] });
+    render(<App client={client} />);
+
+    await screen.findByRole("heading", { name: reportDto.title });
+    await user.click(screen.getByRole("button", { name: "Change status, current Pending" }));
+    expect(screen.getByRole("menu")).toBeTruthy();
+
+    await user.click(await screen.findByRole("button", { name: "Review beta testers, 1 pending" }));
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(await screen.findByRole("dialog", { name: "Beta applications" })).toBeTruthy();
+  });
+
   it("keeps the join mode in the exact GitHub OAuth redirect", () => {
     expect(betaJoinRedirect("/wrong-path/", "http://localhost:5173")).toBe(
       "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",

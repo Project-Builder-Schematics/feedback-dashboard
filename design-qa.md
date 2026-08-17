@@ -39,6 +39,7 @@
 ## Comparison history
 
 1. Initial run: source mock available; implementation browser capture is blocked at authentication.
+2. Follow-up: the approval dialog was tightened to the source's calmer, compact visual language, and opening it now explicitly closes the status chooser. The authenticated browser comparison remains blocked; the interaction is covered by the web test suite.
 
 ## Final result
 
