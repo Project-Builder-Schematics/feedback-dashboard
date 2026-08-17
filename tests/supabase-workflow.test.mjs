@@ -35,6 +35,10 @@ test("deploys migrations and Edge Functions safely on relevant pushes to main", 
   assert.match(workflow, /supabase functions deploy tester-api --project-ref "\$SUPABASE_PROJECT_ID"/);
   assert.match(
     workflow,
+    /supabase functions deploy beta-applications --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
+  );
+  assert.match(
+    workflow,
     /supabase functions deploy attachment-upload-api --project-ref "\$SUPABASE_PROJECT_ID" --no-verify-jwt/,
   );
   assert.match(

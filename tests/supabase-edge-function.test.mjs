@@ -62,6 +62,18 @@ test("keeps tester onboarding JWT-verified and derives GitHub identity through a
   assert.doesNotMatch(entrypoint, /user_metadata|email|login|avatar/);
 });
 
+test("authenticates beta applications in the handler after bypassing the legacy JWT gateway", async () => {
+  const source = await readFile(
+    new URL("../supabase/functions/beta-applications/index.ts", import.meta.url),
+    "utf8",
+  );
+  const config = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
+
+  assert.match(config, /\[functions\.beta-applications\]\s*\nverify_jwt\s*=\s*false/);
+  assert.match(source, /supabase\.auth\.getUser\(token\)/);
+  assert.match(source, /if \(error \|\| !data\.user\) return null/);
+});
+
 test("deploys a stateless OAuth-protected MCP Edge Function", async () => {
   const entrypoint = await readFile(
     new URL("../supabase/functions/project-builder-mcp/index.ts", import.meta.url),

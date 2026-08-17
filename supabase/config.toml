@@ -7,6 +7,9 @@ verify_jwt = true
 [functions.tester-api]
 verify_jwt = true
 
+[functions.beta-applications]
+verify_jwt = false
+
 [functions.project-builder-mcp]
 verify_jwt = false
 
