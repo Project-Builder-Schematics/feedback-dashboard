@@ -181,12 +181,13 @@ describe("Project Builder creator dashboard", () => {
     const client = createClient({ session: { user: { id: "tester" } } });
     render(<App client={client} />);
 
+    await user.type(await screen.findByLabelText("Approval email"), "tester@example.com");
     await user.click(await screen.findByRole("button", { name: "Join the review list" }));
 
     expect(await screen.findByRole("heading", { name: "Application received" })).toBeTruthy();
     expect(client.functions.invoke).toHaveBeenCalledWith("beta-applications", {
       method: "POST",
-      body: { action: "apply" },
+      body: { action: "apply", email: "tester@example.com" },
     });
   });
 

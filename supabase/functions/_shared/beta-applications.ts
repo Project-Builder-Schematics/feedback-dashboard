@@ -4,7 +4,7 @@ import type { RateLimiter } from "./rate-limit.ts";
 
 const uuid = z.uuid();
 const action = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("apply") }).strict(),
+  z.object({ action: z.literal("apply"), email: z.email().max(254) }).strict(),
   z.object({ action: z.literal("list") }).strict(),
   z.object({ action: z.literal("approve"), applicationId: uuid }).strict(),
 ]);
@@ -42,8 +42,8 @@ export function createBetaApplicationsHandler(options: {
     if (!limit.allowed) return Response.json({ error: { code: "rate_limited" } }, { status: 429, headers });
     if (parsed.data.action === "apply") {
       const identity = actor.identities.find((item) => item.provider === "github" && item.user_id === actor.userId && typeof item.provider_id === "string" && item.provider_id.trim());
-      if (!identity || !actor.email) return Response.json({ error: { code: "github_email_required" } }, { status: 403, headers });
-      const application = await actor.store.submit({ userId: actor.userId, providerId: String(identity.provider_id).trim(), email: actor.email, requestId: nextRequestId() });
+      if (!identity) return Response.json({ error: { code: "github_identity_required" } }, { status: 403, headers });
+      const application = await actor.store.submit({ userId: actor.userId, providerId: String(identity.provider_id).trim(), email: parsed.data.email.toLowerCase(), requestId: nextRequestId() });
       return Response.json({ application }, { status: 201, headers });
     }
     if (!creators.has(actor.userId)) return Response.json({ error: { code: "forbidden" } }, { status: 403, headers });

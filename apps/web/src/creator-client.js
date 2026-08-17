@@ -27,10 +27,10 @@ export function betaApplyRedirect() {
   return "https://project-builder-schematics.github.io/feedback-dashboard/?mode=apply";
 }
 
-export async function submitBetaApplication(client) {
+export async function submitBetaApplication(client, email) {
   const { data, error } = await client.functions.invoke("beta-applications", {
     method: "POST",
-    body: { action: "apply" },
+    body: { action: "apply", email },
   });
   if (error || data?.application?.status !== "pending") {
     throw new Error("Unable to submit beta application.");

@@ -43,7 +43,7 @@ test("records one pending application for the authenticated GitHub identity", as
     requestId: () => "420cae56-26fb-4f45-9491-5b7766d6d5a7",
   });
 
-  const response = await handler(request({ action: "apply" }));
+  const response = await handler(request({ action: "apply", email: "tester@example.com" }));
 
   assert.equal(response.status, 201);
   assert.deepEqual(await response.json(), {

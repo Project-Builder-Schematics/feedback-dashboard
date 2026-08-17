@@ -644,6 +644,7 @@ function FullPageState({ title, detail, action, icon: Icon = CircleNotch, tone =
 
 function BetaApplicationScreen({ client, session, sessionLoading }) {
   const [state, setState] = useState("idle");
+  const [email, setEmail] = useState(session?.user?.email ?? "");
   const signIn = () => client.auth.signInWithOAuth({
     provider: "github",
     options: { redirectTo: betaApplyRedirect() },
@@ -651,7 +652,7 @@ function BetaApplicationScreen({ client, session, sessionLoading }) {
   const apply = async () => {
     setState("submitting");
     try {
-      await submitBetaApplication(client);
+      await submitBetaApplication(client, email);
       setState("submitted");
     } catch {
       setState("error");
@@ -659,7 +660,7 @@ function BetaApplicationScreen({ client, session, sessionLoading }) {
   };
   if (sessionLoading) return <FullPageState title="Checking GitHub access…" />;
   if (state === "submitted") return <FullPageState eyebrow="Project Builder beta" title="Application received" detail="We will review your application and email you when MCP access is ready." icon={CheckCircle} tone="success" enhanced />;
-  return <FullPageState eyebrow="Project Builder beta" title="Apply to become a beta tester" detail="Use the GitHub account you plan to connect to the feedback MCP. Applications are reviewed manually." enhanced action={session ? <button className="primary-button" type="button" disabled={state === "submitting"} onClick={apply}>{state === "submitting" ? "Submitting…" : "Join the review list"}</button> : <button className="primary-button" type="button" onClick={signIn}><GithubLogo size={18} />Continue with GitHub</button>} tone={state === "error" ? "error" : "neutral"} />;
+  return <FullPageState eyebrow="Project Builder beta" title="Apply to become a beta tester" detail="Use the GitHub account you plan to connect to the feedback MCP. Applications are reviewed manually." enhanced action={session ? <form onSubmit={(event) => { event.preventDefault(); apply(); }}><label htmlFor="beta-email">Approval email</label><input id="beta-email" type="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /><button className="primary-button" type="submit" disabled={state === "submitting"}>{state === "submitting" ? "Submitting…" : "Join the review list"}</button></form> : <button className="primary-button" type="button" onClick={signIn}><GithubLogo size={18} />Continue with GitHub</button>} tone={state === "error" ? "error" : "neutral"} />;
 }
 
 export function App({ client = getSupabaseClient() }) {
