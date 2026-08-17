@@ -605,22 +605,52 @@ function BetaInviteControl({ client }) {
 
 function BetaApplicationsControl({ client }) {
   const [applications, setApplications] = useState([]);
-  const [message, setMessage] = useState("");
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState("idle");
+  const [approvingId, setApprovingId] = useState(null);
   const load = async () => {
-    setMessage("");
-    try { setApplications(await loadBetaApplications(client)); } catch { setMessage("Applications could not be loaded."); }
+    setOpen(true);
+    setState("loading");
+    try {
+      setApplications(await loadBetaApplications(client));
+      setState("ready");
+    } catch {
+      setState("error");
+    }
   };
   const approve = async (id) => {
+    setApprovingId(id);
     try {
       await approveBetaApplication(client, id);
       setApplications((current) => current.map((item) => item.id === id ? { ...item, status: "approved" } : item));
-      setMessage("Application approved and email sent.");
-    } catch { setMessage("Application could not be approved."); }
+    } catch {
+      setApplications((current) => current.map((item) => item.id === id ? { ...item, approvalError: true } : item));
+    } finally {
+      setApprovingId(null);
+    }
   };
-  return <section aria-label="Beta applications">
-    <button className="secondary-button" type="button" onClick={load}>Review beta applications</button>
-    {applications.filter((item) => item.status === "pending").map((item) => <div key={item.id}><span>{item.email}</span><button className="secondary-button" type="button" onClick={() => approve(item.id)}>Approve</button></div>)}
-    {message && <p className="access-message" role="status">{message}</p>}
+  const pending = applications.filter((item) => item.status === "pending");
+  return <section className="beta-control" aria-label="Beta applications">
+    <button className="secondary-button" type="button" onClick={load}>Review applications</button>
+    {open && <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !approvingId) setOpen(false); }}>
+      <section className="applications-dialog" role="dialog" aria-modal="true" aria-labelledby="applications-title">
+        <header className="applications-dialog-header">
+          <div><span className="eyebrow">Beta program</span><h2 id="applications-title">Beta applications</h2><p>{pending.length} pending {pending.length === 1 ? "application" : "applications"}</p></div>
+          <button className="icon-button" type="button" aria-label="Close beta applications" onClick={() => setOpen(false)}><XCircle size={20} /></button>
+        </header>
+        <div className="applications-list">
+          {state === "loading" && <p className="applications-empty">Loading applications…</p>}
+          {state === "error" && <div className="applications-empty" role="alert"><strong>Applications could not be loaded.</strong><button className="secondary-button" type="button" onClick={load}>Try again</button></div>}
+          {state === "ready" && applications.length === 0 && <p className="applications-empty">No beta applications yet.</p>}
+          {state === "ready" && applications.map((item) => <article className="application-row" key={item.id}>
+            <div className="application-copy"><strong>{item.email}</strong><span>Applied <time dateTime={item.created_at}>{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(item.created_at))}</time></span></div>
+            <div className="application-action">
+              {item.status === "approved" ? <span className="application-approved"><CheckCircle size={16} weight="fill" />Approved · Email sent</span> : <><span className="application-status">Pending review</span><button className="primary-button" type="button" disabled={approvingId === item.id} aria-label={`Approve ${item.email}`} onClick={() => approve(item.id)}>{approvingId === item.id ? "Approving…" : "Approve"}</button>{item.approvalError && <span className="application-error" role="alert">Approval failed. Try again.</span>}</>}
+            </div>
+          </article>)}
+        </div>
+      </section>
+    </div>}
   </section>;
 }
 

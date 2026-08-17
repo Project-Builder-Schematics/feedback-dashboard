@@ -116,7 +116,20 @@ function createClient({
         : { data: { membership: { status: "active" } }, error: null };
     }
     if (name === "beta-applications") {
-      return { data: { application: { id: "application-1", status: "pending" } }, error: null };
+      if (options.body.action === "list") {
+        return {
+          data: {
+            applications: [{
+              id: "application-1",
+              email: "tester@example.com",
+              status: "pending",
+              created_at: "2026-08-17T05:00:00.000Z",
+            }],
+          },
+          error: null,
+        };
+      }
+      return { data: { application: { id: "application-1", status: options.body.action === "approve" ? "approved" : "pending" } }, error: null };
     }
     if (options.method === "GET") {
       return listError
@@ -189,6 +202,21 @@ describe("Project Builder creator dashboard", () => {
       method: "POST",
       body: { action: "apply", email: "tester@example.com" },
     });
+  });
+
+  it("reviews beta applications in a dedicated dialog and keeps approval feedback attached", async () => {
+    const user = userEvent.setup();
+    const client = createClient({ session: { user: { id: "creator" } }, reports: [reportDto] });
+    render(<App client={client} />);
+
+    await screen.findByRole("heading", { name: reportDto.title });
+    await user.click(screen.getByRole("button", { name: "Review applications" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Beta applications" });
+    expect(within(dialog).getByText("tester@example.com")).toBeTruthy();
+    expect(within(dialog).getByText("Pending review")).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: "Approve tester@example.com" }));
+    expect(await within(dialog).findByText("Approved · Email sent")).toBeTruthy();
   });
 
   it("keeps the join mode in the exact GitHub OAuth redirect", () => {
