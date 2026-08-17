@@ -115,6 +115,9 @@ function createClient({
         ? redeem(options)
         : { data: { membership: { status: "active" } }, error: null };
     }
+    if (name === "beta-applications") {
+      return { data: { application: { id: "application-1", status: "pending" } }, error: null };
+    }
     if (options.method === "GET") {
       return listError
         ? { data: null, error: new Error("load failed") }
@@ -172,6 +175,21 @@ afterEach(() => {
 });
 
 describe("Project Builder creator dashboard", () => {
+  it("uses GitHub to apply and records the authenticated tester on confirmation", async () => {
+    window.history.replaceState({}, "", "/feedback-dashboard/?mode=apply");
+    const user = userEvent.setup();
+    const client = createClient({ session: { user: { id: "tester" } } });
+    render(<App client={client} />);
+
+    await user.click(await screen.findByRole("button", { name: "Join the review list" }));
+
+    expect(await screen.findByRole("heading", { name: "Application received" })).toBeTruthy();
+    expect(client.functions.invoke).toHaveBeenCalledWith("beta-applications", {
+      method: "POST",
+      body: { action: "apply" },
+    });
+  });
+
   it("keeps the join mode in the exact GitHub OAuth redirect", () => {
     expect(betaJoinRedirect("/wrong-path/", "http://localhost:5173")).toBe(
       "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",

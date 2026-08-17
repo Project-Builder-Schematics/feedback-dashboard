@@ -23,6 +23,33 @@ export function betaJoinRedirect() {
   return "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join";
 }
 
+export function betaApplyRedirect() {
+  return "https://project-builder-schematics.github.io/feedback-dashboard/?mode=apply";
+}
+
+export async function submitBetaApplication(client) {
+  const { data, error } = await client.functions.invoke("beta-applications", {
+    method: "POST",
+    body: { action: "apply" },
+  });
+  if (error || data?.application?.status !== "pending") {
+    throw new Error("Unable to submit beta application.");
+  }
+  return data.application;
+}
+
+export async function loadBetaApplications(client) {
+  const { data, error } = await client.functions.invoke("beta-applications", { method: "POST", body: { action: "list" } });
+  if (error || !Array.isArray(data?.applications)) throw new Error("Unable to load beta applications.");
+  return data.applications;
+}
+
+export async function approveBetaApplication(client, applicationId) {
+  const { data, error } = await client.functions.invoke("beta-applications", { method: "POST", body: { action: "approve", applicationId } });
+  if (error || data?.application?.status !== "approved") throw new Error("Unable to approve beta application.");
+  return data.application;
+}
+
 export async function loadOAuthAuthorization(client, authorizationId) {
   const { data, error } = await client.auth.oauth.getAuthorizationDetails(authorizationId);
   if (error || !data) throw new Error("Unable to load OAuth authorization.");

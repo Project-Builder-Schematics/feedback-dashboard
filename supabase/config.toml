@@ -17,6 +17,7 @@ verify_jwt = false
 site_url = "https://project-builder-schematics.github.io"
 additional_redirect_urls = [
   "https://project-builder-schematics.github.io/feedback-dashboard/",
+  "https://project-builder-schematics.github.io/feedback-dashboard/?mode=apply",
   "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",
   "https://project-builder-schematics.github.io/feedback-dashboard/oauth/consent/**",
 ]

@@ -33,14 +33,18 @@ import {
 
 import {
   BETA_INVITE_STORAGE_KEY,
+  betaApplyRedirect,
   betaJoinRedirect,
   createBetaInvite,
   decideOAuthAuthorization,
   getSupabaseClient,
   loadCreatorReports,
+  loadBetaApplications,
   loadOAuthAuthorization,
   redeemBetaInvite,
   saveCreatorReportStatus,
+  submitBetaApplication,
+  approveBetaApplication,
 } from "./creator-client.js";
 
 const STATUS_ORDER = ["Pending", "Validating", "In construction", "Resolved", "Discarded"];
@@ -599,6 +603,27 @@ function BetaInviteControl({ client }) {
   );
 }
 
+function BetaApplicationsControl({ client }) {
+  const [applications, setApplications] = useState([]);
+  const [message, setMessage] = useState("");
+  const load = async () => {
+    setMessage("");
+    try { setApplications(await loadBetaApplications(client)); } catch { setMessage("Applications could not be loaded."); }
+  };
+  const approve = async (id) => {
+    try {
+      await approveBetaApplication(client, id);
+      setApplications((current) => current.map((item) => item.id === id ? { ...item, status: "approved" } : item));
+      setMessage("Application approved and email sent.");
+    } catch { setMessage("Application could not be approved."); }
+  };
+  return <section aria-label="Beta applications">
+    <button className="secondary-button" type="button" onClick={load}>Review beta applications</button>
+    {applications.filter((item) => item.status === "pending").map((item) => <div key={item.id}><span>{item.email}</span><button className="secondary-button" type="button" onClick={() => approve(item.id)}>Approve</button></div>)}
+    {message && <p className="access-message" role="status">{message}</p>}
+  </section>;
+}
+
 function FullPageState({ title, detail, action, icon: Icon = CircleNotch, tone = "neutral", busy = false, eyebrow, enhanced = false }) {
   return (
     <main className={`access-shell${enhanced ? " auth-shell" : ""}`}>
@@ -617,9 +642,30 @@ function FullPageState({ title, detail, action, icon: Icon = CircleNotch, tone =
   );
 }
 
+function BetaApplicationScreen({ client, session, sessionLoading }) {
+  const [state, setState] = useState("idle");
+  const signIn = () => client.auth.signInWithOAuth({
+    provider: "github",
+    options: { redirectTo: betaApplyRedirect() },
+  });
+  const apply = async () => {
+    setState("submitting");
+    try {
+      await submitBetaApplication(client);
+      setState("submitted");
+    } catch {
+      setState("error");
+    }
+  };
+  if (sessionLoading) return <FullPageState title="Checking GitHub access…" />;
+  if (state === "submitted") return <FullPageState eyebrow="Project Builder beta" title="Application received" detail="We will review your application and email you when MCP access is ready." icon={CheckCircle} tone="success" enhanced />;
+  return <FullPageState eyebrow="Project Builder beta" title="Apply to become a beta tester" detail="Use the GitHub account you plan to connect to the feedback MCP. Applications are reviewed manually." enhanced action={session ? <button className="primary-button" type="button" disabled={state === "submitting"} onClick={apply}>{state === "submitting" ? "Submitting…" : "Join the review list"}</button> : <button className="primary-button" type="button" onClick={signIn}><GithubLogo size={18} />Continue with GitHub</button>} tone={state === "error" ? "error" : "neutral"} />;
+}
+
 export function App({ client = getSupabaseClient() }) {
   const mode = new URLSearchParams(window.location.search).get("mode");
   const joinMode = mode === "join";
+  const applyMode = mode === "apply";
   const uploadMode = mode === "upload";
   const consentMode = window.location.pathname.endsWith("/oauth/consent/");
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -660,7 +706,7 @@ export function App({ client = getSupabaseClient() }) {
   }, [client]);
 
   useEffect(() => {
-    if (!session || joinMode || uploadMode || consentMode) return;
+    if (!session || joinMode || applyMode || uploadMode || consentMode) return;
     let active = true;
     setReportsState("loading");
     loadCreatorReports(client).then(
@@ -678,7 +724,7 @@ export function App({ client = getSupabaseClient() }) {
     return () => {
       active = false;
     };
-  }, [client, consentMode, joinMode, session, uploadMode]);
+  }, [applyMode, client, consentMode, joinMode, session, uploadMode]);
 
   const selected = reports.find((report) => report.reportId === selectedId) ?? reports[0];
   const counts = useMemo(
@@ -706,6 +752,9 @@ export function App({ client = getSupabaseClient() }) {
   if (joinMode) {
     return <BetaJoinScreen client={client} session={session} sessionLoading={sessionLoading} />;
   }
+  if (applyMode) {
+    return <BetaApplicationScreen client={client} session={session} sessionLoading={sessionLoading} />;
+  }
   if (uploadMode) {
     return <AttachmentUploadScreen client={client} />;
   }
@@ -721,7 +770,7 @@ export function App({ client = getSupabaseClient() }) {
     return <FullPageState title="Feedback could not be loaded." detail="Sign out and try again." action={<button type="button" onClick={() => client.auth.signOut()}>Sign out</button>} />;
   }
   if (reportsState === "empty") {
-    return <FullPageState title="No feedback reports yet" detail="New beta reports will appear here." action={<><BetaInviteControl client={client} /><button type="button" onClick={() => client.auth.signOut()}>Sign out</button></>} />;
+    return <FullPageState title="No feedback reports yet" detail="New beta reports will appear here." action={<><BetaApplicationsControl client={client} /><BetaInviteControl client={client} /><button type="button" onClick={() => client.auth.signOut()}>Sign out</button></>} />;
   }
 
   const selectFilter = (status) => {
@@ -790,7 +839,7 @@ export function App({ client = getSupabaseClient() }) {
 
       <main className="workspace" id="top">
         <aside className="queue-panel">
-          <div className="queue-title"><div><span className="eyebrow">Beta program</span><h1>Feedback queue</h1></div><BetaInviteControl client={client} /></div>
+          <div className="queue-title"><div><span className="eyebrow">Beta program</span><h1>Feedback queue</h1></div><div><BetaApplicationsControl client={client} /><BetaInviteControl client={client} /></div></div>
           <nav className="status-filters" aria-label="Feedback states">
             {STATUS_ORDER.map((status) => (
               <button type="button" key={status} className={filter === status ? "active" : ""} onClick={() => selectFilter(status)} aria-label={`${status} ${counts[status]} reports`}>

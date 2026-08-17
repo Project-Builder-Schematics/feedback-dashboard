@@ -1,6 +1,6 @@
 {
   "site_url": "https://project-builder-schematics.github.io",
-  "uri_allow_list": "https://project-builder-schematics.github.io/feedback-dashboard/,https://project-builder-schematics.github.io/feedback-dashboard/?mode=join,https://project-builder-schematics.github.io/feedback-dashboard/oauth/consent/**",
+  "uri_allow_list": "https://project-builder-schematics.github.io/feedback-dashboard/,https://project-builder-schematics.github.io/feedback-dashboard/?mode=apply,https://project-builder-schematics.github.io/feedback-dashboard/?mode=join,https://project-builder-schematics.github.io/feedback-dashboard/oauth/consent/**",
   "hook_custom_access_token_enabled": true,
   "hook_custom_access_token_uri": "pg-functions://postgres/public/project_builder_access_token_hook",
   "oauth_server_enabled": true,

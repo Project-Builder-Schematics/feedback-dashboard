@@ -21,6 +21,7 @@ test("keeps production Auth redirects and MCP OAuth configuration out of localho
     site_url: "https://project-builder-schematics.github.io",
     uri_allow_list: [
       "https://project-builder-schematics.github.io/feedback-dashboard/",
+      "https://project-builder-schematics.github.io/feedback-dashboard/?mode=apply",
       "https://project-builder-schematics.github.io/feedback-dashboard/?mode=join",
       "https://project-builder-schematics.github.io/feedback-dashboard/oauth/consent/**",
     ].join(","),
