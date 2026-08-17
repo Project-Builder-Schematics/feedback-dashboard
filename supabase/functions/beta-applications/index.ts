@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createBetaApplicationsHandler } from "../_shared/beta-applications.ts";
 import { createSupabaseRateLimiter } from "../_shared/rate-limit.ts";
+import { verifiedGithubIdentity } from "../_shared/verified-github-identity.ts";
 
 const env = (name: string) => { const value = Deno.env.get(name)?.trim(); if (!value) throw new Error(`${name} is required.`); return value; };
 const supabase = createClient(env("SUPABASE_URL"), JSON.parse(env("SUPABASE_SECRET_KEYS")).default, { auth: { persistSession: false } });
@@ -33,7 +34,16 @@ export default { fetch: createBetaApplicationsHandler({
     if (!token) return null;
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) return null;
-    return { userId: data.user.id, email: data.user.email, identities: data.user.identities ?? [], rateLimiter: createSupabaseRateLimiter(supabase), store };
+    return {
+      userId: data.user.id,
+      email: data.user.email,
+      identities: (data.user.identities ?? []).flatMap((identity) => {
+        const verified = verifiedGithubIdentity(identity);
+        return verified ? [verified] : [];
+      }),
+      rateLimiter: createSupabaseRateLimiter(supabase),
+      store,
+    };
   },
   sendApprovalEmail: async ({ email }) => {
     const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from: env("PB_BETA_FROM_EMAIL"), to: [email], subject: "Your Project Builder beta access is ready", html: '<p>Your beta access is active. You can now sign in to the Project Builder feedback MCP with GitHub.</p>' }) });

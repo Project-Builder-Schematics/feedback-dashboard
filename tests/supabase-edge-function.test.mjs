@@ -72,6 +72,7 @@ test("authenticates beta applications in the handler after bypassing the legacy 
   assert.match(config, /\[functions\.beta-applications\]\s*\nverify_jwt\s*=\s*false/);
   assert.match(source, /supabase\.auth\.getUser\(token\)/);
   assert.match(source, /if \(error \|\| !data\.user\) return null/);
+  assert.match(source, /verifiedGithubIdentity\(identity\)/);
 });
 
 test("deploys a stateless OAuth-protected MCP Edge Function", async () => {
