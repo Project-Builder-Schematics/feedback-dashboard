@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { betaApprovalEmail } from "../_shared/beta-approval-email.ts";
 import { createBetaApplicationsHandler } from "../_shared/beta-applications.ts";
 import { createSupabaseRateLimiter } from "../_shared/rate-limit.ts";
 import { verifiedGithubIdentity } from "../_shared/verified-github-identity.ts";
@@ -46,7 +47,7 @@ export default { fetch: createBetaApplicationsHandler({
     };
   },
   sendApprovalEmail: async ({ email }) => {
-    const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from: env("PB_BETA_FROM_EMAIL"), to: [email], subject: "Your Project Builder beta access is ready", html: '<p>Your beta access is active. You can now sign in to the Project Builder feedback MCP with GitHub.</p>' }) });
+    const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from: env("PB_BETA_FROM_EMAIL"), to: [email], ...betaApprovalEmail(`${env("SUPABASE_URL").replace(/\/$/, "")}/functions/v1/project-builder-mcp`) }) });
     if (!response.ok) throw new Error("Unable to send approval email.");
   },
 }) };
